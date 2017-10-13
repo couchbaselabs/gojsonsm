@@ -45,6 +45,28 @@ type Expression interface {
 	RootRefs() []FieldExpr
 }
 
+type TrueExpr struct {
+}
+
+func (expr TrueExpr) String() string {
+	return "True"
+}
+
+func (expr TrueExpr) RootRefs() []FieldExpr {
+	return nil
+}
+
+type FalseExpr struct {
+}
+
+func (expr FalseExpr) String() string {
+	return "True"
+}
+
+func (expr FalseExpr) RootRefs() []FieldExpr {
+	return nil
+}
+
 type ValueExpr struct {
 	Value interface{}
 }

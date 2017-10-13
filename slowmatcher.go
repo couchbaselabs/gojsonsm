@@ -7,13 +7,15 @@ import (
 )
 
 type SlowMatcher struct {
-	expr Expression
+	exprs []Expression
+	exprMatches []bool
 	vars map[int]interface{}
 }
 
-func NewSlowMatcher(expr Expression) *SlowMatcher {
+func NewSlowMatcher(exprs []Expression) *SlowMatcher {
 	return &SlowMatcher{
-		expr: expr,
+		exprs: exprs,
+		exprMatches: make([]bool, len(exprs)),
 	}
 }
 
@@ -116,9 +118,15 @@ func (m *SlowMatcher) compareExprs(lhs Expression, rhs Expression) (int, error) 
 			}
 			return 0, nil
 		}
+	case nil:
+		switch rhsVal.(type) {
+		case nil:
+			return 0, nil
+		}
+		return -1, nil
 	}
 
-	panic("unexpected lhs type")
+	return 0, errors.New("unexpected lhs type")
 }
 
 func (m *SlowMatcher) matchAnyInExpr(expr AnyInExpr) (bool, error) {
@@ -211,6 +219,27 @@ func (m *SlowMatcher) matchOne(expr Expression) (bool, error) {
 	panic("unexpected expression")
 }
 
+func (m *SlowMatcher) matchOneRootExpr(expr Expression) (bool, error) {
+	// We do this to match the Matcher requirement that all non-root
+	// expressions be already compressed of all constant values.
+	switch expr.(type) {
+	case TrueExpr:
+		return true, nil
+	case FalseExpr:
+		return false, nil
+	}
+	return m.matchOne(expr)
+}
+
+func (m *SlowMatcher) Reset() {
+	for i := range m.vars {
+		delete(m.vars, i)
+	}
+	for i := range m.exprMatches {
+		m.exprMatches[i] = false
+	}
+}
+
 func (m *SlowMatcher) Match(data []byte) (bool, error) {
 	var parsedData interface{}
 	if err := json.Unmarshal(data, &parsedData); err != nil {
@@ -222,11 +251,26 @@ func (m *SlowMatcher) Match(data []byte) (bool, error) {
 	}
 	m.vars[0] = parsedData
 
-	res, err := m.matchOne(m.expr)
-	if err != nil {
-		return false, err
+	matched := false
+	for i, expr := range m.exprs {
+		res, err := m.matchOneRootExpr(expr)
+		if err != nil {
+			return false, err
+		}
+
+		m.exprMatches[i] = res
+
+		if i == 0 && res {
+			matched = true
+		} else if !res {
+			matched = false
+		}
 	}
 
 	delete(m.vars, 0)
-	return res, nil
+	return matched, nil
+}
+
+func (m *SlowMatcher) ExpressionMatched(expressionIdx int) bool {
+	return m.exprMatches[expressionIdx]
 }

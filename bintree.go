@@ -1,9 +1,9 @@
 package gojsonsm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
-	"errors"
 )
 
 type BinTreeNodeType int
@@ -131,7 +131,6 @@ func (tree *binTree) validateItem(item int, parent int) (int, error) {
 	if idata.Left <= 0 || idata.Left >= len(tree.data) {
 		return -1, errors.New("expected left to be defined, and inside the tree")
 	}
-
 
 	if idata.NodeType == nodeTypeNot {
 		// Right must not be set

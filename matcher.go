@@ -25,7 +25,8 @@ func NewMatcher(def *MatchDef) *Matcher {
 }
 
 func (m *Matcher) Reset() {
-
+	m.variables = m.variables[:0]
+	m.buckets.Reset()
 }
 
 func (m *Matcher) leaveValue() error {
@@ -213,6 +214,7 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 }
 
 func (m *Matcher) Match(data []byte) (bool, error) {
+
 	m.tokens.start(data)
 
 	token, tokenData, err := m.tokens.step()
@@ -233,4 +235,10 @@ func (m *Matcher) Match(data []byte) (bool, error) {
 	}
 
 	return m.buckets.IsTrue(0), nil
+}
+
+func (m *Matcher) ExpressionMatched(expressionIdx int) bool {
+	binTreeIdx := m.def.MatchBuckets[expressionIdx]
+	return m.buckets.IsResolved(binTreeIdx) &&
+		m.buckets.IsTrue(binTreeIdx)
 }

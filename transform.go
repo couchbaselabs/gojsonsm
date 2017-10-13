@@ -17,6 +17,35 @@ func (ref VarRef) String() string {
 	return fmt.Sprintf("$%d", ref.VarIdx)
 }
 
+
+type mergeExpr struct {
+	exprs     []Expression
+	bucketIDs []BucketID
+}
+
+func (expr mergeExpr) String() string {
+	if len(expr.exprs) == 0 {
+		return "%%ERROR%%"
+	} else if len(expr.exprs) == 1 {
+		return expr.exprs[0].String()
+	} else {
+		value := reindentString(expr.exprs[0].String(), "  ")
+		for i := 1; i < len(expr.exprs); i++ {
+			value += "\nOR\n"
+			value += reindentString(expr.exprs[i].String(), "  ")
+		}
+		return value
+	}
+}
+
+func (expr mergeExpr) RootRefs() []FieldExpr {
+	var out []FieldExpr
+	for _, subexpr := range expr.exprs {
+		out = rootSetAdd(out, subexpr.RootRefs()...)
+	}
+	return out
+}
+
 type Transformer struct {
 	VarIdx          VariableID
 	BucketIdx       BucketID
@@ -93,8 +122,8 @@ func loopTypeToString(value LoopType) string {
 
 type LoopNode struct {
 	BucketIdx BucketID
-	Mode LoopType
-	Node *ExecNode
+	Mode      LoopType
+	Node      *ExecNode
 }
 
 type ExecNode struct {
@@ -106,11 +135,12 @@ type ExecNode struct {
 }
 
 type MatchDef struct {
-	ParseNode  *ExecNode
-	MatchTree  binTree
-	NumBuckets int
-	NumFetches int
-	MaxDepth   int
+	ParseNode    *ExecNode
+	MatchTree    binTree
+	MatchBuckets []int
+	NumBuckets   int
+	NumFetches   int
+	MaxDepth     int
 }
 
 func (def MatchDef) String() string {
@@ -121,6 +151,10 @@ func (def MatchDef) String() string {
 	out += "match tree:\n"
 	out += reindentString(def.MatchTree.String(), "  ")
 	out += "\n"
+	out += "match buckets:\n"
+	for i, bucketID := range def.MatchBuckets {
+		out += fmt.Sprintf("  %d: %d\n", i, bucketID)
+	}
 	out += fmt.Sprintf("num buckets: %d\n", def.NumBuckets)
 	out += fmt.Sprintf("num fetches: %d\n", def.NumFetches)
 	out += fmt.Sprintf("max depth: %d\n", def.MaxDepth)
@@ -237,6 +271,32 @@ func (t *Transformer) newVariable() VariableID {
 	newVariableIdx := t.VarIdx
 	t.VarIdx++
 	return newVariableIdx + 1
+}
+
+func (t *Transformer) transformMergePiece(expr mergeExpr, i int) *ExecNode {
+	if i == len(expr.exprs) - 1 {
+		expr.bucketIDs[i] = t.ActiveBucketIdx
+		return t.transformOne(expr.exprs[i])
+	}
+
+	baseBucketIdx := t.ActiveBucketIdx
+	t.RootTree.data[baseBucketIdx].NodeType = nodeTypeOr
+
+	t.newBucket()
+	expr.bucketIDs[i] = t.ActiveBucketIdx
+	t.RootTree.data[baseBucketIdx].Left = int(t.ActiveBucketIdx)
+	t.transformOne(expr.exprs[i])
+
+	t.ActiveBucketIdx = baseBucketIdx
+	t.newBucket()
+	t.RootTree.data[baseBucketIdx].Right = int(t.ActiveBucketIdx)
+	t.transformMergePiece(expr, i + 1)
+
+	return nil
+}
+
+func (t *Transformer) transformMerge(expr mergeExpr) *ExecNode {
+	return t.transformMergePiece(expr, 0)
 }
 
 func (t *Transformer) transformOr(expr OrExpr) *ExecNode {
@@ -406,6 +466,8 @@ func (t *Transformer) transformGreaterEqual(expr GreaterEqualExpr) *ExecNode {
 
 func (t *Transformer) transformOne(expr Expression) *ExecNode {
 	switch expr := expr.(type) {
+	case mergeExpr:
+		return t.transformMerge(expr)
 	case AnyInExpr:
 		return t.transformAnyIn(expr)
 	case OrExpr:
@@ -422,7 +484,10 @@ func (t *Transformer) transformOne(expr Expression) *ExecNode {
 	return nil
 }
 
-func (t *Transformer) Transform(expr Expression) *MatchDef {
+var AlwaysTrueIdent = -1
+var AlwaysFalseIdent = -2
+
+func (t *Transformer) Transform(exprs []Expression) *MatchDef {
 	t.RootExec = &ExecNode{}
 	t.ActiveExec = t.RootExec
 	t.NodeMap = make(map[int]*ExecNode)
@@ -440,22 +505,63 @@ func (t *Transformer) Transform(expr Expression) *MatchDef {
 		},
 	}}
 
-	t.transformOne(expr)
+	// This does two things, it 'predefines' true and false values
+	// within it, and then addition provides an index to which generated
+	// expression contains the bucket index we need for that expression.
+	exprBucketIDs := make([]int, len(exprs))
 
-	err := t.RootTree.Validate()
-	if err != nil {
-		panic(err)
+	var genExprs []Expression
+	for i, expr := range exprs {
+		switch expr.(type) {
+		case TrueExpr:
+			exprBucketIDs[i] = AlwaysTrueIdent
+			continue
+		case FalseExpr:
+			exprBucketIDs[i] = AlwaysFalseIdent
+			continue
+		}
+
+		genExprs = append(genExprs, expr)
+		exprBucketIDs[i] = len(genExprs) - 1
 	}
 
-	if t.RootTree.NumNodes() != int(t.BucketIdx) {
-		panic("bucket count did not match tree size")
+	if len(genExprs) > 0 {
+		mergeExpr := mergeExpr{
+			exprs:     genExprs,
+			bucketIDs: make([]BucketID, len(exprs)),
+		}
+		t.transformOne(mergeExpr)
+
+		for i, index := range exprBucketIDs {
+			if index >= 0 {
+				exprBucketIDs[i] = int(mergeExpr.bucketIDs[index])
+			}
+		}
+	} else {
+		t.RootExec = nil
+		t.RootTree = binTree{}
+		t.BucketIdx = 0
+		t.VarIdx = 0
+		t.MaxDepth = 0
+	}
+
+	if t.RootExec != nil {
+		err := t.RootTree.Validate()
+		if err != nil {
+			panic(err)
+		}
+
+		if t.RootTree.NumNodes() != int(t.BucketIdx) {
+			panic("bucket count did not match tree size")
+		}
 	}
 
 	return &MatchDef{
-		ParseNode:  t.RootExec,
-		MatchTree:  t.RootTree,
-		NumBuckets: int(t.BucketIdx),
-		NumFetches: int(t.VarIdx),
-		MaxDepth:   t.MaxDepth,
+		ParseNode:    t.RootExec,
+		MatchTree:    t.RootTree,
+		MatchBuckets: exprBucketIDs,
+		NumBuckets:   int(t.BucketIdx),
+		NumFetches:   int(t.VarIdx),
+		MaxDepth:     t.MaxDepth,
 	}
 }

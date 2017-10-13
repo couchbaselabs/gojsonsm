@@ -1,9 +1,9 @@
 package gojsonsm
 
 import (
-	"testing"
 	"encoding/json"
 	"github.com/davecgh/go-spew/spew"
+	"testing"
 )
 
 func BenchmarkMatcher(b *testing.B) {
@@ -37,7 +37,7 @@ func BenchmarkMatcher(b *testing.B) {
 	}
 
 	var trans Transformer
-	matchDef := trans.Transform(expr)
+	matchDef := trans.Transform([]Expression{expr})
 	m := NewMatcher(matchDef)
 
 	b.SetBytes(int64(totalBytes))
@@ -84,7 +84,7 @@ func BenchmarkSlowMatcher(b *testing.B) {
 		return
 	}
 
-	m := NewSlowMatcher(expr)
+	m := NewSlowMatcher([]Expression{expr})
 
 	b.SetBytes(int64(totalBytes))
 	b.ResetTimer()
@@ -150,13 +150,13 @@ func TestMatcher(t *testing.T) {
 	t.Logf("Stats:\n%s", stats)
 
 	var trans Transformer
-	matchDef := trans.Transform(expr)
+	matchDef := trans.Transform([]Expression{expr})
 
 	t.Logf("Transformed:\n%s", matchDef)
 
 	for i := 0; i < len(data); i++ {
 		m := NewMatcher(matchDef)
-		sm := NewSlowMatcher(expr)
+		sm := NewSlowMatcher([]Expression{expr})
 
 		matched, err := m.Match(data[i])
 		if err != nil {
