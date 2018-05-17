@@ -2,17 +2,37 @@ package gojsonsm
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/Knetic/govaluate"
 	"github.com/davecgh/go-spew/spew"
 	"testing"
 )
 
-func BenchmarkMatcher(b *testing.B) {
-	data := make([][]byte, 1)
+func generateRandomData(mbsToGenerate int) ([][]byte, int, error) {
+	//	data := make([][]byte, 1)
+	//	totalBytes, err := genRandomUsers(32534059803498589, data)
+	//	if err != nil {
+	//		return nil, 0, err
+	//	}
+	//	fmt.Printf("TotalBytes: %v TotalEntries: %v\n", totalBytes, len(data))
+	avgBytesOfOneRecord := 1800
+	rowsToGenerate := mbsToGenerate * 1000000 / avgBytesOfOneRecord
+	data := make([][]byte, rowsToGenerate)
 	totalBytes, err := genRandomUsers(32534059803498589, data)
 	if err != nil {
-		b.Fatalf("Failed to generate test data: %s", err)
+		return nil, 0, err
+	}
+	fmt.Printf("MBs To Generate: %v TotalBytes: %v TotalEntries: %v\n", mbsToGenerate, totalBytes, len(data))
+	return data, totalBytes, nil
+}
+
+func BenchmarkMatcher(b *testing.B) {
+	data, totalBytes, err := generateRandomData(1)
+	if err != nil || len(data) == 0 {
+		b.Fatalf("Data generation error: %s", err)
 	}
 
+	// name["first"]="Brett" OR (age<50 AND isActive=True)
 	matchJson := []byte(`
 	["or",
 	  ["equals",
@@ -42,7 +62,6 @@ func BenchmarkMatcher(b *testing.B) {
 
 	b.SetBytes(int64(totalBytes))
 	b.ResetTimer()
-
 	for j := 0; j < b.N; j++ {
 		for i := 0; i < len(data); i++ {
 			_, err := m.Match(data[i])
@@ -55,10 +74,9 @@ func BenchmarkMatcher(b *testing.B) {
 }
 
 func BenchmarkSlowMatcher(b *testing.B) {
-	data := make([][]byte, 1)
-	totalBytes, err := genRandomUsers(32534059803498589, data)
-	if err != nil {
-		b.Fatalf("Failed to generate test data: %s", err)
+	data, totalBytes, err := generateRandomData(1)
+	if err != nil || len(data) == 0 {
+		b.Fatalf("Data generation error: %s", err)
 	}
 
 	matchJson := []byte(`
@@ -100,11 +118,41 @@ func BenchmarkSlowMatcher(b *testing.B) {
 	}
 }
 
-func TestMatcher(t *testing.T) {
-	data := make([][]byte, 1)
-	_, err := genRandomUsers(32534059803498589, data)
+func BenchmarkFlexibleMatcher(b *testing.B) {
+	data, totalBytes, err := generateRandomData(1)
+	if err != nil || len(data) == 0 {
+		b.Fatalf("Data generation error: %s", err)
+	}
+
+	m := NewFlexibleMatcher()
+
+	// Expression reformatted:
+	expression, err := govaluate.NewEvaluableExpression("firstName == 'Neil' || (age < 50 && isActive == true)")
 	if err != nil {
-		t.Fatalf("Failed to generate test data: %s", err)
+		b.Fatal("NewEvaluableExpression Error: %s", err)
+		return
+	}
+
+	// Pre-make parameters and re-use
+	parameters := NewParameterArray(3)
+	b.SetBytes(int64(totalBytes))
+	b.ResetTimer()
+
+	for j := 0; j < b.N; j++ {
+		for i := 0; i < len(data); i++ {
+			_, err := m.Match(data[i], expression, *parameters)
+
+			if err != nil {
+				b.Fatalf("Matcher error: %s", err)
+			}
+		}
+	}
+}
+
+func TestMatcher(t *testing.T) {
+	data, _, err := generateRandomData(1)
+	if err != nil || len(data) == 0 {
+		t.Fatalf("Data generation error: %s", err)
 	}
 
 	var parsedData interface{}
@@ -126,16 +174,35 @@ func TestMatcher(t *testing.T) {
 	      ["field", "isActive"],
 	      ["value", true]
 	    ]
-	  ],
-	  ["anyin",
-	     1,
-	     ["field", "tags"],
-	     ["equals",
-	       ["field", 1],
-	       ["value", "nothing"]
-	     ]
-	   ]
+	  ]
     ]`)
+
+	// Disabling for now since FlexibleMatcher isn't flexible enough for anyin
+	//	matchJson := []byte(`
+	//	["or",
+	//	  ["equals",
+	//	    ["field", "name", "first"],
+	//	    ["value", "Brett"]
+	//	  ],
+	//	  ["and",
+	//	    ["lessthan",
+	//	      ["field", "age"],
+	//	      ["value", 50]
+	//	    ],
+	//	    ["equals",
+	//	      ["field", "isActive"],
+	//	      ["value", true]
+	//	    ]
+	//	  ],
+	//	  ["anyin",
+	//	     1,
+	//	     ["field", "tags"],
+	//	     ["equals",
+	//	       ["field", 1],
+	//	       ["value", "nothing"]
+	//	     ]
+	//	   ]
+	//    ]`)
 	expr, err := ParseJsonExpression(matchJson)
 	if err != nil {
 		t.Errorf("Failed to parse expression: %s", err)
@@ -143,6 +210,13 @@ func TestMatcher(t *testing.T) {
 	}
 
 	t.Logf("Expression:\n%s", expr)
+
+	matchExpression, err := govaluate.NewEvaluableExpression("firstName == 'Brett' || (age < 50 && isActive == true)")
+	if err != nil {
+		t.Fatal("NewEvaluableExpression Error: %s", err)
+		return
+	}
+	parameters := NewParameterArray(3)
 
 	var stats ExpressionStats
 	stats.Scan(expr)
@@ -154,29 +228,39 @@ func TestMatcher(t *testing.T) {
 
 	t.Logf("Transformed:\n%s", matchDef)
 
+	mismatched := 0.0
+	totalMatched := 0.0
 	for i := 0; i < len(data); i++ {
 		m := NewMatcher(matchDef)
-		sm := NewSlowMatcher([]Expression{expr})
-
 		matched, err := m.Match(data[i])
 		if err != nil {
 			t.Errorf("Matcher error: %s", err)
 			continue
 		}
 
-		slowMatched, err := sm.Match(data[i])
+		em := NewFlexibleMatcher()
+		flexMatched, err := em.Match(data[i], matchExpression, *parameters)
 		if err != nil {
-			t.Errorf("Slow matcher error: %s", err)
+			t.Errorf("FlexMatcher error: %s", err)
 			continue
 		}
 
-		if matched != slowMatched {
-			t.Errorf("Matchers did not agree for item %d", i)
+		totalMatched++
+		if matched != flexMatched {
+			var unmd map[string]interface{}
+			err = json.Unmarshal(data[i], &unmd)
+			if err != nil {
+				t.Errorf("Unable to unmarshal: %s", err.Error())
+			}
+			t.Errorf("Matchers did not agree for item: %s", spew.Sdump(unmd))
 			t.Errorf("  Fast Matcher: %t", matched)
-			t.Errorf("  Slow Matcher: %t", slowMatched)
+			t.Errorf("  Flex Matcher: %t", flexMatched)
+			mismatched++
 			continue
 		}
 	}
+
+	fmt.Printf("Total matches: %v - Mismatches: %v - pass rate: %v\n", totalMatched, mismatched, (totalMatched-mismatched)/totalMatched)
 }
 
 /*

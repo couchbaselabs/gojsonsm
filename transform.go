@@ -17,7 +17,6 @@ func (ref VarRef) String() string {
 	return fmt.Sprintf("$%d", ref.VarIdx)
 }
 
-
 type mergeExpr struct {
 	exprs     []Expression
 	bucketIDs []BucketID
@@ -274,7 +273,7 @@ func (t *Transformer) newVariable() VariableID {
 }
 
 func (t *Transformer) transformMergePiece(expr mergeExpr, i int) *ExecNode {
-	if i == len(expr.exprs) - 1 {
+	if i == len(expr.exprs)-1 {
 		expr.bucketIDs[i] = t.ActiveBucketIdx
 		return t.transformOne(expr.exprs[i])
 	}
@@ -290,7 +289,7 @@ func (t *Transformer) transformMergePiece(expr mergeExpr, i int) *ExecNode {
 	t.ActiveBucketIdx = baseBucketIdx
 	t.newBucket()
 	t.RootTree.data[baseBucketIdx].Right = int(t.ActiveBucketIdx)
-	t.transformMergePiece(expr, i + 1)
+	t.transformMergePiece(expr, i+1)
 
 	return nil
 }
