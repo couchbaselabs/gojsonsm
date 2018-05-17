@@ -172,11 +172,9 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 				m.skipValue(token)
 			}
 
-			/*
-				if m.buckets.IsResolved(0) && !m.buckets.IsTrue(0) {
-					return nil
-				}
-			*/
+			if m.buckets.IsResolved(0) {
+				return nil
+			}
 		}
 	}
 
