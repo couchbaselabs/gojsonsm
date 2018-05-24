@@ -256,12 +256,12 @@ func (t *Transformer) newBucket() BucketID {
 	newBucketIdx := t.BucketIdx
 	t.BucketIdx++
 
-	t.RootTree.data = append(t.RootTree.data, binTreeNode{
-		int(t.ActiveBucketIdx),
+	t.RootTree.data = append(t.RootTree.data, *NewBinTreeNode(
 		nodeTypeLeaf,
+		int(t.ActiveBucketIdx),
 		0,
 		0,
-	})
+	))
 	t.ActiveBucketIdx = newBucketIdx
 	return newBucketIdx
 }
@@ -497,10 +497,7 @@ func (t *Transformer) Transform(exprs []Expression) *MatchDef {
 	t.ActiveBucketIdx = 0
 	t.RootTree = binTree{[]binTreeNode{
 		{
-			0,
-			nodeTypeLeaf,
-			0,
-			0,
+			NodeType: nodeTypeLeaf,
 		},
 	}}
 
