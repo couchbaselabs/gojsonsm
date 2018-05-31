@@ -137,6 +137,39 @@ func TestSimpleParserSubContext4(t *testing.T) {
 	fmt.Println("========================= TestSimpleParserSubContext4 End ============================")
 }
 
+func TestSimpleParserSubContext4a(t *testing.T) {
+	fmt.Println("========================= TestSimpleParserSubContext4a Start ============================")
+	assert := assert.New(t)
+
+	// This should have short circuiting -> firstName should be checked first
+	testString := "firstName == 'Neil' && age < 50 && isActive == true"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	ctx.enableShortCircuitEvalIfPossible()
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	//	fmt.Printf("DEBUG tree: %v\n", ctx.parserTree.data)
+	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(2, ctx.parserTree.data[1].Right)
+	assert.Equal(-1, ctx.parserTree.data[3].ParentIdx)
+	assert.Equal(1, ctx.parserTree.data[3].Left)
+	assert.Equal(7, ctx.parserTree.data[3].Right)
+	assert.Equal(7, ctx.parserTree.data[5].ParentIdx)
+	assert.Equal(4, ctx.parserTree.data[5].Left)
+	assert.Equal(6, ctx.parserTree.data[5].Right)
+	assert.Equal(3, ctx.parserTree.data[7].ParentIdx)
+	assert.Equal(5, ctx.parserTree.data[7].Left)
+	assert.Equal(9, ctx.parserTree.data[7].Right)
+	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
+	assert.Equal(8, ctx.parserTree.data[9].Left)
+	assert.Equal(10, ctx.parserTree.data[9].Right)
+	fmt.Println("========================= TestSimpleParserSubContext4a End ============================")
+}
+
 func TestSimpleParserSubContext5(t *testing.T) {
 	fmt.Println("========================= TestSimpleParserSubContext5 Start ============================")
 	assert := assert.New(t)
@@ -219,6 +252,28 @@ func TestSimpleParserParenMismatch2(t *testing.T) {
 	err = ctx.parse()
 	assert.Equal(ErrorParenMismatch, err)
 	fmt.Println("========================= TestSimpleParserParenMismatch2 End ============================")
+}
+
+func TestContextShortCircuit1(t *testing.T) {
+	fmt.Println("========================= TestContextShortCircuit1 Starts ============================")
+	assert := assert.New(t)
+	testString := "firstName == 'Neil' || (age < 50) || (true)"
+	ctx, _ := NewExpressionParserCtx(testString)
+
+	ctx.enableShortCircuitEvalIfPossible()
+	assert.True(ctx.shortCircuitEnabled)
+	fmt.Println("========================= TestContextShortCircuit1 End ============================")
+}
+
+func TestContextShortCircuit2(t *testing.T) {
+	fmt.Println("========================= TestContextShortCircuit2 Starts ============================")
+	assert := assert.New(t)
+	testString := "firstName == 'Neil' || (age < 50) && (true)"
+	ctx, _ := NewExpressionParserCtx(testString)
+
+	ctx.enableShortCircuitEvalIfPossible()
+	assert.False(ctx.shortCircuitEnabled)
+	fmt.Println("========================= TestContextShortCircuit2 End ============================")
 }
 
 func TestContextParserToken(t *testing.T) {

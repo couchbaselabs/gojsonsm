@@ -91,6 +91,9 @@ type expressionParserContext struct {
 	// Current sub context
 	subCtx *parserSubContext
 
+	// non-short ciruit eval -> left most expression does not necessarily translate into the first to be examined
+	shortCircuitEnabled bool
+
 	// Final parser tree - binTree is the one that is used to keep track of tree structure
 	// Each element of []ParserTreeNode corresponds to the # of element in parserTree.data
 	parserTree      binParserTree
@@ -270,11 +273,26 @@ func (ctx *expressionParserContext) setupForToken(tokenType ParseTokenType) erro
 	return nil
 }
 
+func (ctx *expressionParserContext) getErrorNeedToStartNewCtx() error {
+	return ErrorNeedToStartNewCtx
+}
+
+func (ctx *expressionParserContext) getErrorNeedToStartOneNewCtx() error {
+	if ctx.shortCircuitEnabled {
+		// If short circuit is enabled, no need to return after one context.
+		// Having recursively starting new context will make it such that the left-most
+		// expression stays at the higher levels
+		return ErrorNeedToStartNewCtx
+	} else {
+		return ErrorNeedToStartOneNewCtx
+	}
+}
+
 func (ctx *expressionParserContext) checkTokenTypeWithinContext(tokenType ParseTokenType) error {
 	switch ctx.subCtx.currentMode {
 	case fieldMode:
 		if tokenType == TokenTypeParen {
-			return ErrorNeedToStartNewCtx
+			return ctx.getErrorNeedToStartNewCtx()
 		} else if tokenType != TokenTypeField && tokenType != TokenTypeTrue && tokenType != TokenTypeFalse {
 			return fmt.Errorf("Error: For field mode, token must be field type - received %v", tokenType.String())
 		}
@@ -287,9 +305,9 @@ func (ctx *expressionParserContext) checkTokenTypeWithinContext(tokenType ParseT
 		}
 	case valueMode:
 		if tokenType == TokenTypeParen {
-			return ErrorNeedToStartNewCtx
+			return ctx.getErrorNeedToStartNewCtx()
 		} else if tokenType == TokenTypeField {
-			return ErrorNeedToStartOneNewCtx
+			return ctx.getErrorNeedToStartOneNewCtx()
 		} else if tokenType != TokenTypeValue && tokenType != TokenTypeTrue && tokenType != TokenTypeFalse {
 			return fmt.Errorf("Error: For value mode, token must be value type - received %v", tokenType.String())
 		}
@@ -387,10 +405,28 @@ func (ctx *expressionParserContext) mergeAndRestoreSubContexts(currentSubCtx *pa
 	return nil
 }
 
+func (ctx *expressionParserContext) enableShortCircuitEvalIfPossible() {
+	// Enable short circuit if expression is consisted only of && or only of ||
+	var operator string
+	for i := 0; i < len(ctx.tokens); i++ {
+		if ctx.tokens[i] == TokenOperatorOr || ctx.tokens[i] == TokenOperatorAnd {
+			if len(operator) == 0 {
+				operator = ctx.tokens[i]
+			} else {
+				if ctx.tokens[i] != operator {
+					return
+				}
+			}
+		}
+	}
+	ctx.shortCircuitEnabled = true
+}
+
 func (ctx *expressionParserContext) parse() error {
 	var token string
 	var tokenType ParseTokenType
 	var err error
+
 	for ; ; err = ctx.advanceToken() {
 		if err != nil {
 			break
@@ -458,12 +494,14 @@ func getTokenType(token string) (ParseTokenType, error) {
 	return TokenTypeInvalid, fmt.Errorf("getTokenType error: Unable to parse token: %v", token)
 }
 
+// Main outside facing method
 func ParseSimpleExpression(strExpression string) (Expression, error) {
 	var dummyExpression Expression
 
 	// For the sake of simplicity, prepend "true ||" in front
 
 	ctx, err := NewExpressionParserCtx(strExpression)
+	ctx.enableShortCircuitEvalIfPossible()
 	err = ctx.parse()
 
 	return dummyExpression, err
