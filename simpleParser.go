@@ -6,13 +6,15 @@ import (
 	"strings"
 )
 
-var dummyExpression Expression
+var emptyExpression Expression
 var ErrorNotFound error = fmt.Errorf("Error: Specified resource was not found")
 var ErrorNoMoreTokens error = fmt.Errorf("Error: No more token found")
 var ErrorNeedToStartOneNewCtx error = fmt.Errorf("Error: Need to spawn one subcontext")
 var ErrorNeedToStartNewCtx error = fmt.Errorf("Error: Need to spawn subcontext")
 var ErrorParenMismatch error = fmt.Errorf("Error: Parenthesis mismatch")
 var NonErrorOneLayerDone error = fmt.Errorf("One layer has finished")
+
+type FieldVarMap map[string][]string
 
 type ParserTreeNode struct {
 	tokenType ParseTokenType
@@ -130,6 +132,13 @@ type expressionParserContext struct {
 
 	// Outputting context
 	currentOuputNode int
+	varMap           FieldVarMap
+}
+
+func NewExpressionParserCtxWithFields(strExpression string, varMap FieldVarMap) (*expressionParserContext, error) {
+	ctx, err := NewExpressionParserCtx(strExpression)
+	ctx.varMap = varMap
+	return ctx, err
 }
 
 func NewExpressionParserCtx(strExpression string) (*expressionParserContext, error) {
@@ -314,6 +323,8 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 		ctx.checkAndMarkDetailedOpToken(token)
 		return token, TokenTypeOperator, nil
 	} else if valueRegex.MatchString(token) {
+		// For value, strip the single quote
+		token = strings.Trim(token, "'")
 		return token, TokenTypeValue, nil
 	} else if valueNumRegex.MatchString(token) {
 		return token, TokenTypeValue, nil
@@ -487,6 +498,12 @@ func (ctx *expressionParserContext) mergeAndRestoreSubContexts(currentSubCtx *pa
 	}
 	lastOpNodeOfNewContext.ParentIdx = currentSubCtx.lastOpIndex
 
+	// When merging, figure out the actual head and update it
+	lastOpIndexNode := ctx.parserTree.data[currentSubCtx.lastOpIndex]
+	if lastOpIndexNode.ParentIdx == -1 {
+		ctx.treeHeadIndex = currentSubCtx.lastOpIndex
+	}
+
 	// Once merge is done - restore original context
 	*(ctx.subCtx) = *(currentSubCtx)
 	return nil
@@ -589,19 +606,43 @@ func (ctx *expressionParserContext) getRightOutputNode(pos int) (ParserTreeNode,
 }
 
 func (ctx *expressionParserContext) outputNode(node ParserTreeNode, pos int) (Expression, error) {
-	var dummyExpression Expression
-
 	switch node.tokenType {
 	case TokenTypeOperator:
 		return ctx.outputOp(node, pos)
+	case TokenTypeField:
+		return ctx.outputField(node)
+	case TokenTypeTrue:
+		fallthrough
+	case TokenTypeFalse:
+		fallthrough
+	case TokenTypeValue:
+		return ctx.outputValue(node)
 	default:
-		return dummyExpression, fmt.Errorf("Error: Invalid Node token type: %v", node.tokenType.String())
+		return emptyExpression, fmt.Errorf("Error: Invalid Node token type: %v", node.tokenType.String())
 	}
 }
 
-func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expression, error) {
-	var dummyExpression Expression
+func (ctx *expressionParserContext) outputValue(node ParserTreeNode) (Expression, error) {
+	return ValueExpr{node.data}, nil
+}
 
+func (ctx *expressionParserContext) outputField(node ParserTreeNode) (Expression, error) {
+	var out FieldExpr
+	var data []string
+	fieldVariable := (node.data).(string)
+
+	data, ok := ctx.varMap[fieldVariable]
+	if !ok {
+		// The field variable becomes the actual field in the json doc
+		data = make([]string, 1)
+		data[0] = fieldVariable
+	}
+
+	out.Path = data
+	return out, nil
+}
+
+func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expression, error) {
 	switch (node.data).(string) {
 	case TokenOperatorEqual:
 		return ctx.outputEq(node, pos)
@@ -611,8 +652,10 @@ func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expr
 		return ctx.outputAnd(node, pos)
 	case TokenOperatorGreaterThanEq:
 		return ctx.outputGreaterEquals(node, pos)
+	case TokenOperatorLessThan:
+		return ctx.outputLessThan(node, pos)
 	default:
-		return dummyExpression, fmt.Errorf("Error: Invalid op type: %s", node.data)
+		return emptyExpression, fmt.Errorf("Error: Invalid op type: %s", node.data)
 	}
 }
 
@@ -625,12 +668,13 @@ func (ctx *expressionParserContext) outputGreaterEquals(node ParserTreeNode, pos
 	if err != nil {
 		return out, err
 	}
-	out.Lhs = leftSubExpr
 
 	rightSubExpr, err := ctx.outputNode(rightNode, rightPos)
 	if err != nil {
 		return out, err
 	}
+
+	out.Lhs = leftSubExpr
 	out.Rhs = rightSubExpr
 
 	return out, nil
@@ -645,12 +689,13 @@ func (ctx *expressionParserContext) outputLessThan(node ParserTreeNode, pos int)
 	if err != nil {
 		return out, err
 	}
-	out.Lhs = leftSubExpr
 
 	rightSubExpr, err := ctx.outputNode(rightNode, rightPos)
 	if err != nil {
 		return out, err
 	}
+
+	out.Lhs = leftSubExpr
 	out.Rhs = rightSubExpr
 
 	return out, nil
@@ -665,12 +710,13 @@ func (ctx *expressionParserContext) outputEq(node ParserTreeNode, pos int) (Expr
 	if err != nil {
 		return out, err
 	}
-	out.Lhs = leftSubExpr
 
 	rightSubExpr, err := ctx.outputNode(rightNode, rightPos)
 	if err != nil {
 		return out, err
 	}
+
+	out.Lhs = leftSubExpr
 	out.Rhs = rightSubExpr
 
 	return out, nil
@@ -685,12 +731,13 @@ func (ctx *expressionParserContext) outputAnd(node ParserTreeNode, pos int) (Exp
 	if err != nil {
 		return out, err
 	}
-	out = append(out, leftSubExpr)
 
 	rightSubExpr, err := ctx.outputNode(rightNode, rightPos)
 	if err != nil {
 		return out, err
 	}
+
+	out = append(out, leftSubExpr)
 	out = append(out, rightSubExpr)
 
 	return out, nil
@@ -705,12 +752,12 @@ func (ctx *expressionParserContext) outputOr(node ParserTreeNode, pos int) (Expr
 	if err != nil {
 		return out, err
 	}
-	out = append(out, leftSubExpr)
-
 	rightSubExpr, err := ctx.outputNode(rightNode, rightPos)
 	if err != nil {
 		return out, err
 	}
+
+	out = append(out, leftSubExpr)
 	out = append(out, rightSubExpr)
 
 	return out, nil
@@ -718,12 +765,12 @@ func (ctx *expressionParserContext) outputOr(node ParserTreeNode, pos int) (Expr
 
 func (ctx *expressionParserContext) outputExpression() (Expression, error) {
 	if ctx.parserTree.NumNodes() == 0 || ctx.treeHeadIndex == -1 {
-		return dummyExpression, nil
+		return emptyExpression, nil
 	}
 
 	node := ctx.getThisOutputNode(ctx.treeHeadIndex)
 	if node.tokenType != TokenTypeOperator {
-		return dummyExpression, fmt.Errorf("Error: Invalid op node type: %v", node.tokenType.String())
+		return emptyExpression, fmt.Errorf("Error: Invalid op node type: %v", node.tokenType.String())
 	}
 
 	return ctx.outputOp(node, ctx.treeHeadIndex)
@@ -739,10 +786,8 @@ func getTokenType(token string) (ParseTokenType, error) {
 }
 
 // Main outside facing method
-func ParseSimpleExpression(strExpression string) (Expression, error) {
-	var emptyExpression Expression
-
-	ctx, err := NewExpressionParserCtx(strExpression)
+func ParseSimpleExpression(strExpression string, fieldVariables FieldVarMap) (Expression, error) {
+	ctx, err := NewExpressionParserCtxWithFields(strExpression, fieldVariables)
 	ctx.enableShortCircuitEvalIfPossible()
 	err = ctx.parse()
 
