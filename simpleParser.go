@@ -6,6 +6,27 @@ import (
 	"strings"
 )
 
+/**
+ * SimpleParser provides user to be able to specify a C-Styled expression for gojsonsm.
+ * There are two input components:
+ * 1. The actual expression.
+ * 2. (Optional) - a variable map translating a variable in (1) into a Path in the JSON document
+ * 	If a variable is not listed in the map, the actual variable name in (1) will be used as the path.
+ *
+ * Values can be string or floats. Strings should be enclosed by single quotes, as to not be confused
+ * with field variables
+ *
+ * Parenthesis are allowed, but must be surrounded by at least 1 white space
+ * Currently, only the following operations are supported:
+ * 		==, ||, &&, >=, <
+ *
+ * Usage example:
+ * exprStr := "firstName == 'Neil' && (age < 50 || isActive == true)"
+ * pathMap := make(FieldVarMap, 1)
+ * pathMap["firstName"] = []string{"name", "first"}
+ * expr, err := ParseSimpleExpression(exprStr, pathMap)
+ */
+
 var emptyExpression Expression
 var ErrorNotFound error = fmt.Errorf("Error: Specified resource was not found")
 var ErrorNoMoreTokens error = fmt.Errorf("Error: No more token found")
