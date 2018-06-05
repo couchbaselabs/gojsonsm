@@ -650,9 +650,18 @@ func (ctx *expressionParserContext) outputValue(node ParserTreeNode) (Expression
 func (ctx *expressionParserContext) outputField(node ParserTreeNode) (Expression, error) {
 	var out FieldExpr
 	var data []string
-	fieldVariable := (node.data).(string)
+	fieldVariable, ok := (node.data).(string)
+	if !ok {
+		// TODO - we support users entering float instead of int...
+		fieldRootVar, ok := (node.data).(int)
+		if !ok {
+			return out, fmt.Errorf("Error: Field input (%v) is not int nor string", node.data)
+		}
+		out.Root = fieldRootVar
+		return out, nil
+	}
 
-	data, ok := ctx.varMap[fieldVariable]
+	data, ok = ctx.varMap[fieldVariable]
 	if !ok {
 		// The field variable becomes the actual field in the json doc
 		data = make([]string, 1)
