@@ -1,6 +1,7 @@
 package gojsonsm
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -518,6 +519,26 @@ func TestParserExpressionOutput2(t *testing.T) {
 	assert.Nil(err)
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	// DEBUG Test
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	m := NewMatcher(matchDef)
+	//	fmt.Printf("NEIL DEBUG matchDef tree: %v\n", matchDef.MatchTree.data)
+
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Neil",
+		},
+		"isActive": true,
+		"age":      32,
+	}
+	udMarsh, err := json.Marshal(userData)
+	if err != nil {
+		fmt.Println("ERROR marshalling")
+	}
+	m.Match(udMarsh)
+
 }
 
 // NEGATIVE test cases
