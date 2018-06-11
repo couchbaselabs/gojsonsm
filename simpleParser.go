@@ -104,9 +104,6 @@ type parserSubContext struct {
 
 	// Means that we should return as soon as the one layer of field -> op -> value is done
 	oneLayerMode bool
-
-	// In case field and values entered are interchanged
-	swapFieldAndVal bool
 }
 
 func (subctx *parserSubContext) isUnused() bool {
@@ -276,7 +273,6 @@ func (ctx *expressionParserContext) advanceToken() error {
 		}
 
 		ctx.subCtx.opTokenContext.clear()
-		ctx.subCtx.swapFieldAndVal = false
 	default:
 		return fmt.Errorf("Not implemented yet for mode transition %v", ctx.subCtx.currentMode)
 	}
@@ -412,16 +408,12 @@ func (ctx *expressionParserContext) checkTokenTypeWithinContext(tokenType ParseT
 		// fieldMode is a more restrictive valueMode
 		if tokenType == TokenTypeParen {
 			return ctx.getErrorNeedToStartNewCtx()
-		} else if tokenType != TokenTypeField && tokenType != TokenTypeTrue && tokenType != TokenTypeFalse && ctx.subCtx.opTokenContext.isChainOp() {
-			//			return fmt.Errorf("Error: For field mode, token must be field type - received %v", tokenType.String())
-			ctx.subCtx.swapFieldAndVal = true
-			return ctx.getErrorNeedToStartOneNewCtx()
+		} else if tokenType != TokenTypeField && tokenType != TokenTypeTrue && tokenType != TokenTypeFalse {
+			return fmt.Errorf("Error: For field mode, expecting a field type. Received: %v", tokenType)
 		}
 		fallthrough
 	case valueMode:
-		if ctx.subCtx.swapFieldAndVal && tokenType != TokenTypeField {
-			return fmt.Errorf("Error: Previously entered a value. For this value mode, token must be field type - received %v", tokenType.String())
-		} else if tokenType == TokenTypeField && ctx.subCtx.opTokenContext.isChainOp() {
+		if tokenType == TokenTypeField && ctx.subCtx.opTokenContext.isChainOp() {
 			return ctx.getErrorNeedToStartOneNewCtx()
 		} else if tokenType == TokenTypeTrue || tokenType == TokenTypeFalse {
 			if ctx.subCtx.opTokenContext.isCompareOp() {
