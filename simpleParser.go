@@ -25,6 +25,9 @@ import (
  * pathMap := make(FieldVarMap, 1)
  * pathMap["firstName"] = []string{"name", "first"}
  * expr, err := ParseSimpleExpression(exprStr, pathMap)
+ *
+ * Notes:
+ * - Parenthesis parsing is there but could be a bit wonky should users choose to have invalid and weird syntax with it
  */
 
 var emptyExpression Expression
@@ -33,6 +36,7 @@ var ErrorNoMoreTokens error = fmt.Errorf("Error: No more token found")
 var ErrorNeedToStartOneNewCtx error = fmt.Errorf("Error: Need to spawn one subcontext")
 var ErrorNeedToStartNewCtx error = fmt.Errorf("Error: Need to spawn subcontext")
 var ErrorParenMismatch error = fmt.Errorf("Error: Parenthesis mismatch")
+var ErrorParenWSpace error = fmt.Errorf("Error: parenthesis must have white space before or after it")
 var NonErrorOneLayerDone error = fmt.Errorf("One layer has finished")
 
 type FieldVarMap map[string][]string
@@ -46,6 +50,8 @@ func needToSpawnNewContext(err error) bool {
 	return err == ErrorNeedToStartOneNewCtx || err == ErrorNeedToStartNewCtx
 }
 
+var emptyParserTreeNode ParserTreeNode
+
 func NewParserTreeNode(tokenType ParseTokenType, data interface{}) ParserTreeNode {
 	newNode := &ParserTreeNode{
 		tokenType: tokenType,
@@ -55,7 +61,7 @@ func NewParserTreeNode(tokenType ParseTokenType, data interface{}) ParserTreeNod
 }
 
 // Parse mode is within the context that a valid expression should be generically of the type of:
-// field > op -> value
+// field > op -> value -> chain, repeat.
 type parseMode int
 
 const (
@@ -80,6 +86,7 @@ func (pm parseMode) String() string {
 	}
 }
 
+// When in op mode, there can be multiple contexts
 type opTokenContext int
 
 const (
@@ -107,7 +114,8 @@ type parserSubContext struct {
 }
 
 func (subctx *parserSubContext) isUnused() bool {
-	return subctx.lastFieldIndex == -1 && subctx.lastOpIndex == -1 && subctx.lastValueIndex == -1 && subctx.lastSubFieldNode == -1
+	return subctx.lastFieldIndex == -1 && subctx.lastOpIndex == -1 && subctx.lastValueIndex == -1 &&
+		subctx.lastSubFieldNode == -1 && subctx.currentMode == fieldMode
 }
 
 func NewParserSubContext() *parserSubContext {
@@ -129,9 +137,9 @@ func NewParserSubContextOneLayer() *parserSubContext {
 
 type expressionParserContext struct {
 	// For token reading
-	tokens            []string
-	currentTokenIndex int
-	skipAdvanceMode   bool
+	tokens               []string
+	currentTokenIndex    int
+	advTokenPositionOnly bool // This flag is set once, and the corresponding method will toggle it off automatically
 
 	// The levels of parenthesis currently discovered in the expression
 	parenDepth int
@@ -221,10 +229,12 @@ func tokenIsOpType(token string) bool {
 	return tokenIsChainOpType(token) || token == TokenOperatorEqual || token == TokenOperatorNotEqual || tokenIsCompareOpType(token)
 }
 
+// Comparison Operator can be used for both string comparison and numeric
 func tokenIsCompareOpType(token string) bool {
 	return token == TokenOperatorGreaterThanEq || token == TokenOperatorLessThan || token == TokenOperatorLessThanEq || token == TokenOperatorGreaterThan
 }
 
+// Chain-op are operators that can chain multiple expressions together
 func tokenIsChainOpType(token string) bool {
 	return token == TokenOperatorAnd || token == TokenOperatorOr
 }
@@ -244,10 +254,10 @@ func (opCtx *opTokenContext) clear() {
 }
 
 func (ctx *expressionParserContext) advanceToken() error {
-	ctx.currentTokenIndex = ctx.currentTokenIndex + 1
+	ctx.currentTokenIndex++
 
-	if ctx.skipAdvanceMode {
-		ctx.skipAdvanceMode = false
+	if ctx.advTokenPositionOnly {
+		ctx.advTokenPositionOnly = false
 		return nil
 	}
 
@@ -256,8 +266,6 @@ func (ctx *expressionParserContext) advanceToken() error {
 	case fieldMode:
 		// After the field mode, the next token *must* be an op
 		ctx.subCtx.currentMode = opMode
-	case chainMode:
-		ctx.subCtx.currentMode = fieldMode
 	case opMode:
 		// After the op mode, the next mode should be value mode
 		ctx.subCtx.currentMode = valueMode
@@ -273,6 +281,8 @@ func (ctx *expressionParserContext) advanceToken() error {
 		}
 
 		ctx.subCtx.opTokenContext.clear()
+	case chainMode:
+		ctx.subCtx.currentMode = fieldMode
 	default:
 		return fmt.Errorf("Not implemented yet for mode transition %v", ctx.subCtx.currentMode)
 	}
@@ -280,7 +290,7 @@ func (ctx *expressionParserContext) advanceToken() error {
 }
 
 func (ctx *expressionParserContext) handleParenPrefix(paren string) error {
-	// Strip the "(" from this token and into its own element
+	// Strip the "(" or ")" from this token and into its own element
 	ctx.tokens = append(ctx.tokens, "")
 	ctx.tokens[ctx.currentTokenIndex] = strings.TrimPrefix(ctx.tokens[ctx.currentTokenIndex], paren)
 	copy(ctx.tokens[ctx.currentTokenIndex+1:], ctx.tokens[ctx.currentTokenIndex:])
@@ -310,10 +320,11 @@ func (ctx *expressionParserContext) handleCloseParenBookKeeping() error {
 func (ctx *expressionParserContext) handleOpenParenBookKeeping() error {
 	ctx.parenDepth++
 	// for paren prefix, internally advance so the next getToken will not get a paren
-	ctx.currentTokenIndex++
-	return nil
+	ctx.advTokenPositionOnly = true
+	return ctx.advanceToken()
 }
 
+// Given a specific op token, set the opTokenContext to the type of op it is
 func (ctx *expressionParserContext) checkAndMarkDetailedOpToken(token string) {
 	if tokenIsChainOpType(token) && ctx.subCtx.lastSubFieldNode != -1 {
 		// Only set chain op if there is something previously to chain
@@ -323,35 +334,19 @@ func (ctx *expressionParserContext) checkAndMarkDetailedOpToken(token string) {
 	}
 }
 
-func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, error) {
-	if ctx.currentTokenIndex >= len(ctx.tokens) {
-		return "", TokenTypeInvalid, ErrorNoMoreTokens
-	}
-	token := ctx.tokens[ctx.currentTokenIndex]
+func tokenNeedsParenProcess(token string) bool {
+	return (token != "(" && strings.HasPrefix(token, "(")) ||
+		(token != "(" && strings.HasSuffix(token, "(")) ||
+		(token != ")" && strings.HasSuffix(token, ")")) ||
+		(token != ")" && strings.HasPrefix(token, ")")) ||
+		(token == ")")
+}
 
-	// Values by def should be enclosed within single quotes
-	valueRegex := regexp.MustCompile(`^\'.*\'$`)
-	// Or Values can be int or floats by themselves (w/o alpha char)
-	valueNumRegex := regexp.MustCompile(`^(-?)(0|([1-9][0-9]*))(\\.[0-9]+)?$`)
+func (ctx *expressionParserContext) getCurrentTokenParenHelper(token string) (string, ParseTokenType, error) {
 	// For simplicity, let's not allow parenthesis without spaces
-	parenMiddleRegex := regexp.MustCompile(`.+('('|')')+.+`)
+	parenMiddleRegex := regexp.MustCompile(`[A-Za-z]+(\(|\))+[A-Za-z]+`)
 
-	if tokenIsOpType(token) {
-		ctx.checkAndMarkDetailedOpToken(token)
-		return token, TokenTypeOperator, nil
-	} else if valueRegex.MatchString(token) {
-		// For value, strip the single quote
-		token = strings.Trim(token, "'")
-		return token, TokenTypeValue, nil
-	} else if valueNumRegex.MatchString(token) {
-		return token, TokenTypeValue, nil
-	} else if parenMiddleRegex.MatchString(token) {
-		return token, TokenTypeInvalid, fmt.Errorf("Error: parenthesis must have white space before or after it")
-	} else if token == "true" {
-		return token, TokenTypeTrue, nil
-	} else if token == "false" {
-		return token, TokenTypeFalse, nil
-	} else if token != "(" && strings.HasPrefix(token, "(") {
+	if token != "(" && strings.HasPrefix(token, "(") {
 		ctx.handleParenPrefix("(")
 		ctx.handleOpenParenBookKeeping()
 		token = ctx.tokens[ctx.currentTokenIndex]
@@ -369,6 +364,39 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 		return token, TokenTypeEndParen, ctx.handleCloseParenBookKeeping()
 	} else if token == ")" {
 		return token, TokenTypeEndParen, ctx.handleCloseParenBookKeeping()
+	} else if parenMiddleRegex.MatchString(token) {
+		return token, TokenTypeInvalid, ErrorParenWSpace
+	}
+
+	return "", TokenTypeInvalid, fmt.Errorf("Invalid parenthesis case")
+}
+
+func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, error) {
+	if ctx.currentTokenIndex >= len(ctx.tokens) {
+		return "", TokenTypeInvalid, ErrorNoMoreTokens
+	}
+	token := ctx.tokens[ctx.currentTokenIndex]
+
+	// Values by def should be enclosed within single quotes
+	valueRegex := regexp.MustCompile(`^\'.*\'$`)
+	// Or Values can be int or floats by themselves (w/o alpha char)
+	valueNumRegex := regexp.MustCompile(`^(-?)(0|([1-9][0-9]*))(\\.[0-9]+)?$`)
+
+	if tokenIsOpType(token) {
+		ctx.checkAndMarkDetailedOpToken(token)
+		return token, TokenTypeOperator, nil
+	} else if valueRegex.MatchString(token) {
+		// For value, strip the single quote
+		token = strings.Trim(token, "'")
+		return token, TokenTypeValue, nil
+	} else if valueNumRegex.MatchString(token) {
+		return token, TokenTypeValue, nil
+	} else if token == "true" {
+		return token, TokenTypeTrue, nil
+	} else if token == "false" {
+		return token, TokenTypeFalse, nil
+	} else if strings.Contains(token, "(") || strings.Contains(token, ")") {
+		return ctx.getCurrentTokenParenHelper(token)
 	} else {
 		return token, TokenTypeField, nil
 	}
@@ -382,34 +410,35 @@ func (ctx *expressionParserContext) getErrorNeedToStartOneNewCtx() error {
 	if ctx.shortCircuitEnabled {
 		// If short circuit is enabled, no need to return after one context.
 		// Having recursively starting new context will make it such that the left-most
-		// expression stays at the higher levels
+		// expression stays at the higher levels to be evaluated first
 		return ErrorNeedToStartNewCtx
 	} else {
 		return ErrorNeedToStartOneNewCtx
 	}
 }
 
-func (ctx *expressionParserContext) checkTokenTypeWithinContext(tokenType ParseTokenType) error {
+func (ctx *expressionParserContext) checkTokenTypeWithinContext(tokenType ParseTokenType, token string) error {
 	switch ctx.subCtx.currentMode {
 	case opMode:
 		// opMode is pretty much a less restrictive chainMode
 		fallthrough
 	case chainMode:
 		if tokenType == TokenTypeEndParen {
-			ctx.skipAdvanceMode = true
+			// For end parenthesis, do not advance the context
+			ctx.advTokenPositionOnly = true
 			return NonErrorOneLayerDone
 		} else if tokenType != TokenTypeOperator {
-			return fmt.Errorf("Error: For operator/chain mode, token must be operator type - received %v", tokenType.String())
+			return fmt.Errorf("Error: For operator/chain mode, token must be operator type - received %v(%v)", token, tokenType.String())
 		} else if ctx.subCtx.currentMode != opMode && !ctx.subCtx.opTokenContext.isChainOp() {
 			// This is specific for chain mode only
-			return fmt.Errorf("Error: For chain mode, token must be chain type")
+			return fmt.Errorf("Error: For chain mode, token must be chain type - received %v(%v)", token, tokenType.String())
 		}
 	case fieldMode:
 		// fieldMode is a more restrictive valueMode
 		if tokenType == TokenTypeParen {
 			return ctx.getErrorNeedToStartNewCtx()
 		} else if tokenType != TokenTypeField && tokenType != TokenTypeTrue && tokenType != TokenTypeFalse {
-			return fmt.Errorf("Error: For field mode, expecting a field type. Received: %v", tokenType)
+			return fmt.Errorf("Error: For field mode, expecting a field type. Received: %v(%v)", token, tokenType)
 		}
 		fallthrough
 	case valueMode:
@@ -420,10 +449,10 @@ func (ctx *expressionParserContext) checkTokenTypeWithinContext(tokenType ParseT
 				return fmt.Errorf("Error: Unable to do comparison operator on true or false values")
 			}
 		} else if tokenType != TokenTypeValue && tokenType != TokenTypeField {
-			return fmt.Errorf("Error: For value mode, token must be value type - received %v", tokenType.String())
+			return fmt.Errorf("Error: For value mode, token must be value type - received %v(%v)", token, tokenType.String())
 		}
 	default:
-		return fmt.Errorf("Error: Not implemented for tokenType: %v", tokenType.String())
+		return fmt.Errorf("Error: Not implemented for tokenType: %v(%v)", token, tokenType.String())
 	}
 
 	return nil
@@ -472,10 +501,11 @@ func (ctx *expressionParserContext) insertNode(newNode ParserTreeNode) error {
 		lastOpNode := &ctx.parserTree.data[ctx.subCtx.lastOpIndex]
 		lastOpNode.Right = ctx.subCtx.lastValueIndex
 
-		// Now that we have completed a sub-expression, the "op" becomes the head of the last completed nodes
+		// Now that we have completed a sub-expression, the "op" becomes the parent of the last completed nodes
 		ctx.subCtx.lastSubFieldNode = ctx.subCtx.lastOpIndex
 
 	default:
+		// OK to leak the node created above because we should be erroring out anyway
 		return fmt.Errorf("Unsure how to insert into tree: %v", newNode)
 	}
 
@@ -483,14 +513,15 @@ func (ctx *expressionParserContext) insertNode(newNode ParserTreeNode) error {
 }
 
 // Given two sub contexts, one in the ctx, and the older one, merge them
-func (ctx *expressionParserContext) mergeAndRestoreSubContexts(currentSubCtx *parserSubContext) error {
-	// If older subctx is not used, don't merge - this means user entered an expression that started with a open paren
-	if currentSubCtx.isUnused() {
+func (ctx *expressionParserContext) mergeAndRestoreSubContexts(olderSubCtx *parserSubContext) error {
+	// If older subctx is not used, don't merge (nor restore orig context)
+	// - this means user entered an expression that started with a open paren
+	if olderSubCtx.isUnused() {
 		return nil
 	}
 
 	// Boundary check
-	if currentSubCtx.lastOpIndex >= len(ctx.parserTree.data) {
+	if olderSubCtx.lastOpIndex >= len(ctx.parserTree.data) {
 		return ErrorNotFound
 	}
 	if ctx.subCtx.lastOpIndex >= len(ctx.parserTree.data) {
@@ -498,32 +529,32 @@ func (ctx *expressionParserContext) mergeAndRestoreSubContexts(currentSubCtx *pa
 	}
 
 	// Note that the subContext within *ctx is considered newer spawned
-	lastOpNodeOfCurrentSubCtx := &ctx.parserTree.data[currentSubCtx.lastOpIndex]
+	lastOpNodeOfOlderSubCtx := &ctx.parserTree.data[olderSubCtx.lastOpIndex]
 	lastOpNodeOfNewContext := &ctx.parserTree.data[ctx.subCtx.lastOpIndex]
 
-	if lastOpNodeOfCurrentSubCtx.Right != -1 {
-		return fmt.Errorf("Merging sub-context should expect value to be unassigned, but currently assigned to: %v", lastOpNodeOfCurrentSubCtx.Right)
+	if lastOpNodeOfOlderSubCtx.Right != -1 {
+		return fmt.Errorf("Merging sub-context should expect value to be unassigned, but currently assigned to: %v", lastOpNodeOfOlderSubCtx.Right)
 	}
-	lastOpNodeOfCurrentSubCtx.Right = ctx.subCtx.lastOpIndex
+	lastOpNodeOfOlderSubCtx.Right = ctx.subCtx.lastOpIndex
 
 	if lastOpNodeOfNewContext.ParentIdx != -1 {
 		return fmt.Errorf("Merging sub-context should expect parent to be unassigned, but currently assigned to: %v", lastOpNodeOfNewContext.ParentIdx)
 	}
-	lastOpNodeOfNewContext.ParentIdx = currentSubCtx.lastOpIndex
+	lastOpNodeOfNewContext.ParentIdx = olderSubCtx.lastOpIndex
 
-	// When merging, figure out the actual head and update it
-	lastOpIndexNode := ctx.parserTree.data[currentSubCtx.lastOpIndex]
+	// When merging, figure out the actual head and update it - the op that no longer merges to a parent is to be the new head
+	lastOpIndexNode := ctx.parserTree.data[olderSubCtx.lastOpIndex]
 	if lastOpIndexNode.ParentIdx == -1 {
-		ctx.treeHeadIndex = currentSubCtx.lastOpIndex
+		ctx.treeHeadIndex = olderSubCtx.lastOpIndex
 	}
 
 	// Once merge is done - restore original context
-	*(ctx.subCtx) = *(currentSubCtx)
+	*(ctx.subCtx) = *(olderSubCtx)
 	return nil
 }
 
+// Enable short circuit if expression is linked by only && or only ||
 func (ctx *expressionParserContext) enableShortCircuitEvalIfPossible() {
-	// Enable short circuit if expression is linked by only && or only ||
 	var operator string
 	for i := 0; i < len(ctx.tokens); i++ {
 		if ctx.tokens[i] == TokenOperatorOr || ctx.tokens[i] == TokenOperatorAnd {
@@ -539,6 +570,7 @@ func (ctx *expressionParserContext) enableShortCircuitEvalIfPossible() {
 	ctx.shortCircuitEnabled = true
 }
 
+// Main high level portion of the parser
 func (ctx *expressionParserContext) parse() error {
 	var token string
 	var tokenType ParseTokenType
@@ -555,12 +587,10 @@ func (ctx *expressionParserContext) parse() error {
 		}
 
 		// Context mode should match the token
-		var newNode ParserTreeNode
-		err = ctx.checkTokenTypeWithinContext(tokenType)
+		err = ctx.checkTokenTypeWithinContext(tokenType, token)
 		if err == nil {
-			newNode = NewParserTreeNode(tokenType, token)
 			// Push the token into the correct location into the tree
-			err = ctx.insertNode(newNode)
+			err = ctx.insertNode(NewParserTreeNode(tokenType, token))
 			if err != nil {
 				break
 			}
@@ -577,7 +607,7 @@ func (ctx *expressionParserContext) parse() error {
 				ctx.subCtx = NewParserSubContextOneLayer()
 			}
 
-			// Recursively do the next call
+			// Recursively fill in the necessary information in the newer subcontext
 			err = ctx.parse()
 			if err != nil && err != NonErrorOneLayerDone {
 				break
@@ -593,32 +623,54 @@ func (ctx *expressionParserContext) parse() error {
 
 	}
 	if err == ErrorNoMoreTokens {
+		err = nil
 		if ctx.parenDepth > 0 {
 			err = ErrorParenMismatch
-		} else {
-			err = nil
 		}
 	}
 	return err
 }
 
+// Output helpers - return the actual node with data (and optionally the index position of the sought after node)
 func (ctx *expressionParserContext) getThisOutputNode(pos int) ParserTreeNode {
+	if pos >= len(ctx.parserDataNodes) {
+		return emptyParserTreeNode
+	}
 	return ctx.parserDataNodes[pos]
 }
 
 func (ctx *expressionParserContext) getLeftOutputNode(pos int) (ParserTreeNode, int) {
+	if pos >= len(ctx.parserTree.data) {
+		return emptyParserTreeNode, -1
+	}
 	thisNode := ctx.parserTree.data[pos]
+
+	if thisNode.Left >= len(ctx.parserDataNodes) {
+		return emptyParserTreeNode, -1
+	}
 	leftNode := ctx.parserDataNodes[thisNode.Left]
 	return leftNode, thisNode.Left
 }
 
 func (ctx *expressionParserContext) getRightOutputNode(pos int) (ParserTreeNode, int) {
+	if pos >= len(ctx.parserTree.data) {
+		return emptyParserTreeNode, -1
+	}
 	thisNode := ctx.parserTree.data[pos]
+
+	if thisNode.Left >= len(ctx.parserDataNodes) {
+		return emptyParserTreeNode, -1
+	}
 	rightNode := ctx.parserDataNodes[thisNode.Right]
 	return rightNode, thisNode.Right
 }
 
+// Main function used during output to funnel to the right type of output method
 func (ctx *expressionParserContext) outputNode(node ParserTreeNode, pos int) (Expression, error) {
+	if node == emptyParserTreeNode || pos == -1 {
+		return emptyExpression, fmt.Errorf("Error: Unable to parse internal tree data structure")
+	}
+
 	switch node.tokenType {
 	case TokenTypeOperator:
 		return ctx.outputOp(node, pos)
@@ -665,7 +717,12 @@ func (ctx *expressionParserContext) outputField(node ParserTreeNode) (Expression
 }
 
 func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expression, error) {
-	switch (node.data).(string) {
+	nodeData, ok := (node.data).(string)
+	if !ok || pos == -1 {
+		return emptyExpression, fmt.Errorf("Unable to parse internal tree data structure")
+	}
+
+	switch nodeData {
 	case TokenOperatorEqual:
 		return ctx.outputEq(node, pos)
 	case TokenOperatorOr:
@@ -677,10 +734,11 @@ func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expr
 	case TokenOperatorLessThan:
 		return ctx.outputLessThan(node, pos)
 	default:
-		return emptyExpression, fmt.Errorf("Error: Invalid op type: %s", node.data)
+		return emptyExpression, fmt.Errorf("Error: Invalid op type: %s", nodeData)
 	}
 }
 
+// Various outputOp types methods
 func (ctx *expressionParserContext) outputGreaterEquals(node ParserTreeNode, pos int) (Expression, error) {
 	var out GreaterEqualExpr
 	leftNode, leftPos := ctx.getLeftOutputNode(pos)
@@ -785,12 +843,17 @@ func (ctx *expressionParserContext) outputOr(node ParserTreeNode, pos int) (Expr
 	return out, nil
 }
 
+// Main output function to retrieve an Expression from the internal data of expressionParserContext
 func (ctx *expressionParserContext) outputExpression() (Expression, error) {
 	if ctx.parserTree.NumNodes() == 0 || ctx.treeHeadIndex == -1 {
-		return emptyExpression, nil
+		return emptyExpression, fmt.Errorf("Error: string expression has not been parsed into internal data structures")
 	}
 
 	node := ctx.getThisOutputNode(ctx.treeHeadIndex)
+	if node == emptyParserTreeNode {
+		return emptyExpression, fmt.Errorf("Error: Incorrectly parsed context")
+	}
+
 	if node.tokenType != TokenTypeOperator {
 		return emptyExpression, fmt.Errorf("Error: Invalid op node type: %v", node.tokenType.String())
 	}
@@ -798,16 +861,7 @@ func (ctx *expressionParserContext) outputExpression() (Expression, error) {
 	return ctx.outputOp(node, ctx.treeHeadIndex)
 }
 
-func getTokenType(token string) (ParseTokenType, error) {
-	if len(token) == 0 {
-		return TokenTypeInvalid, fmt.Errorf("getTokenType error: Token is of 0 length")
-	} else if tokenIsOpType(token) {
-		return TokenTypeOperator, nil
-	}
-	return TokenTypeInvalid, fmt.Errorf("getTokenType error: Unable to parse token: %v", token)
-}
-
-// Main outside facing method
+// MAIN
 func ParseSimpleExpression(strExpression string, fieldVariables FieldVarMap) (Expression, error) {
 	ctx, err := NewExpressionParserCtxWithFields(strExpression, fieldVariables)
 	ctx.enableShortCircuitEvalIfPossible()

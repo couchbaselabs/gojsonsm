@@ -551,6 +551,28 @@ func TestSimpleParserParenMismatch3(t *testing.T) {
 	assert.Equal(ErrorParenMismatch, err)
 }
 
+func TestSimpleParserParenSyntaxErr(t *testing.T) {
+	fmt.Println("Running TestSimpleParserParenSyntaxErr")
+	assert := assert.New(t)
+
+	testString := "(aField)> 3"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.NotNil(err)
+}
+
+func TestSimpleParserParenSyntaxErr2(t *testing.T) {
+	fmt.Println("Running TestSimpleParserParenSyntaxErr2")
+	assert := assert.New(t)
+
+	testString := "(someField == true)&& true"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.NotNil(err)
+}
+
 // Test for when the first token is NOT a field value
 func TestSimpleParserNeg(t *testing.T) {
 	fmt.Println("Running TestSimpleParserNeg")
@@ -615,5 +637,39 @@ func TestSimpleParserNeg6(t *testing.T) {
 	ctx, err := NewExpressionParserCtx(testString)
 	assert.Equal(fieldMode, ctx.subCtx.currentMode)
 	err = ctx.parse()
+	assert.NotNil(err)
+}
+
+func TestSimpleParserNeg7(t *testing.T) {
+	fmt.Println("Running TestSimpleParserNeg7")
+	assert := assert.New(t)
+
+	testString := "abc(def"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Equal(ErrorParenWSpace, err)
+}
+
+func TestSimpleParserNeg8(t *testing.T) {
+	fmt.Println("Running TestSimpleParserNeg8")
+	assert := assert.New(t)
+
+	testString := "someField == true &&(def) == false"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.NotNil(err)
+}
+
+func TestParserExpressionOutputNeg(t *testing.T) {
+	fmt.Println("Running TestParserExpressionOutputNeg")
+	assert := assert.New(t)
+
+	emptyString := ""
+	ctx, err := NewExpressionParserCtx(emptyString)
+	assert.Nil(err)
+
+	_, err = ctx.outputExpression()
 	assert.NotNil(err)
 }
