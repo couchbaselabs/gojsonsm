@@ -219,6 +219,24 @@ func TestSimpleParserSubContext5(t *testing.T) {
 	assert.Equal(2, ctx.parserTree.data[1].Right)
 }
 
+func TestSimpleParserSubContext5a(t *testing.T) {
+	fmt.Println("Running TestSimpleParserSubContext5a")
+	assert := assert.New(t)
+
+	testString := "( firstName == 'Neil')"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(1, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(2, ctx.parserTree.data[1].Right)
+}
+
 func TestSimpleParserSubContext6(t *testing.T) {
 	fmt.Println("Running TestSimpleParserSubContext6")
 	assert := assert.New(t)

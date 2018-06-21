@@ -334,26 +334,15 @@ func (ctx *expressionParserContext) checkAndMarkDetailedOpToken(token string) {
 	}
 }
 
-func tokenNeedsParenProcess(token string) bool {
-	return (token != "(" && strings.HasPrefix(token, "(")) ||
-		(token != "(" && strings.HasSuffix(token, "(")) ||
-		(token != ")" && strings.HasSuffix(token, ")")) ||
-		(token != ")" && strings.HasPrefix(token, ")")) ||
-		(token == ")")
-}
-
 func (ctx *expressionParserContext) getCurrentTokenParenHelper(token string) (string, ParseTokenType, error) {
 	// For simplicity, let's not allow parenthesis without spaces
 	parenMiddleRegex := regexp.MustCompile(`[A-Za-z]+(\(|\))+[A-Za-z]+`)
 
 	if token != "(" && strings.HasPrefix(token, "(") {
 		ctx.handleParenPrefix("(")
-		ctx.handleOpenParenBookKeeping()
-		token = ctx.tokens[ctx.currentTokenIndex]
-		return token, TokenTypeParen, nil
+		return ctx.getCurrentToken()
 	} else if token != "(" && strings.HasSuffix(token, "(") {
 		ctx.handleParenSuffix("(")
-		ctx.handleOpenParenBookKeeping()
 		return ctx.getCurrentToken()
 	} else if token != ")" && strings.HasSuffix(token, ")") {
 		ctx.handleParenSuffix(")")
@@ -364,11 +353,13 @@ func (ctx *expressionParserContext) getCurrentTokenParenHelper(token string) (st
 		return token, TokenTypeEndParen, ctx.handleCloseParenBookKeeping()
 	} else if token == ")" {
 		return token, TokenTypeEndParen, ctx.handleCloseParenBookKeeping()
+	} else if token == "(" {
+		return token, TokenTypeParen, ctx.handleOpenParenBookKeeping()
 	} else if parenMiddleRegex.MatchString(token) {
 		return token, TokenTypeInvalid, ErrorParenWSpace
 	}
 
-	return "", TokenTypeInvalid, fmt.Errorf("Invalid parenthesis case")
+	return token, TokenTypeInvalid, fmt.Errorf("Invalid parenthesis case")
 }
 
 func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, error) {
@@ -559,15 +550,16 @@ func (ctx *expressionParserContext) enableShortCircuitEvalIfPossible() {
 	for i := 0; i < len(ctx.tokens); i++ {
 		if ctx.tokens[i] == TokenOperatorOr || ctx.tokens[i] == TokenOperatorAnd {
 			if len(operator) == 0 {
+				ctx.shortCircuitEnabled = true
 				operator = ctx.tokens[i]
 			} else {
 				if ctx.tokens[i] != operator {
+					ctx.shortCircuitEnabled = false
 					return
 				}
 			}
 		}
 	}
-	ctx.shortCircuitEnabled = true
 }
 
 // Main high level portion of the parser
