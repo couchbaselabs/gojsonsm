@@ -8,10 +8,6 @@ import (
 
 /**
  * SimpleParser provides user to be able to specify a C-Styled expression for gojsonsm.
- * There are two input components:
- * 1. The actual expression.
- * 2. (Optional) - a variable map translating a variable in (1) into a Path in the JSON document
- * 	If a variable is not listed in the map, the actual variable name in (1) will be used as the path.
  *
  * Values can be string or floats. Strings should be enclosed by single quotes, as to not be confused
  * with field variables
@@ -21,10 +17,8 @@ import (
  * 		==, ||, &&, >=, <
  *
  * Usage example:
- * exprStr := "firstName == 'Neil' && (age < 50 || isActive == true)"
- * pathMap := make(FieldVarMap, 1)
- * pathMap["firstName"] = []string{"name", "first"}
- * expr, err := ParseSimpleExpression(exprStr, pathMap)
+ * exprStr := "name.first == 'Neil' && (age < 50 || isActive == true)"
+ * expr, err := ParseSimpleExpression(exprStr)
  *
  * Notes:
  * - Parenthesis parsing is there but could be a bit wonky should users choose to have invalid and weird syntax with it
@@ -38,8 +32,6 @@ var ErrorNeedToStartNewCtx error = fmt.Errorf("Error: Need to spawn subcontext")
 var ErrorParenMismatch error = fmt.Errorf("Error: Parenthesis mismatch")
 var ErrorParenWSpace error = fmt.Errorf("Error: parenthesis must have white space before or after it")
 var NonErrorOneLayerDone error = fmt.Errorf("One layer has finished")
-
-type FieldVarMap map[string][]string
 
 type ParserTreeNode struct {
 	tokenType ParseTokenType
@@ -70,6 +62,8 @@ const (
 	valueMode parseMode = iota
 	chainMode parseMode = iota
 )
+
+const fieldSeparator = "."
 
 func (pm parseMode) String() string {
 	switch pm {
@@ -158,13 +152,6 @@ type expressionParserContext struct {
 
 	// Outputting context
 	currentOuputNode int
-	varMap           FieldVarMap
-}
-
-func NewExpressionParserCtxWithFields(strExpression string, varMap FieldVarMap) (*expressionParserContext, error) {
-	ctx, err := NewExpressionParserCtx(strExpression)
-	ctx.varMap = varMap
-	return ctx, err
 }
 
 func NewExpressionParserCtx(strExpression string) (*expressionParserContext, error) {
@@ -389,8 +376,21 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 	} else if strings.Contains(token, "(") || strings.Contains(token, ")") {
 		return ctx.getCurrentTokenParenHelper(token)
 	} else {
-		return token, TokenTypeField, nil
+		return checkTokenFieldToken(token)
 	}
+}
+
+// Checks the syntax of field - i.e. paths, array syntax, etc
+func checkTokenFieldToken(token string) (string, ParseTokenType, error) {
+	var err error
+
+	// Field name cannot start or end with a period
+	invalidPeriodPosRegex := regexp.MustCompile(`(^\.)|(\.$)`)
+	if invalidPeriodPosRegex.MatchString(token) {
+		err = fmt.Errorf("Invalid field: %v - cannot start or end with a period", token)
+	}
+
+	return token, TokenTypeField, err
 }
 
 func (ctx *expressionParserContext) getErrorNeedToStartNewCtx() error {
@@ -685,7 +685,6 @@ func (ctx *expressionParserContext) outputValue(node ParserTreeNode) (Expression
 
 func (ctx *expressionParserContext) outputField(node ParserTreeNode) (Expression, error) {
 	var out FieldExpr
-	var data []string
 	fieldVariable, ok := (node.data).(string)
 	if !ok {
 		// TODO - we support users entering float instead of int...
@@ -697,14 +696,9 @@ func (ctx *expressionParserContext) outputField(node ParserTreeNode) (Expression
 		return out, nil
 	}
 
-	data, ok = ctx.varMap[fieldVariable]
-	if !ok {
-		// The field variable becomes the actual field in the json doc
-		data = make([]string, 1)
-		data[0] = fieldVariable
-	}
-
-	out.Path = data
+	// If field is accessor separated (.) separate it into paths just to be safe
+	// even though it may not be necessary as transformer will put it back
+	out.Path = strings.Split(fieldVariable, fieldSeparator)
 	return out, nil
 }
 
@@ -854,8 +848,8 @@ func (ctx *expressionParserContext) outputExpression() (Expression, error) {
 }
 
 // MAIN
-func ParseSimpleExpression(strExpression string, fieldVariables FieldVarMap) (Expression, error) {
-	ctx, err := NewExpressionParserCtxWithFields(strExpression, fieldVariables)
+func ParseSimpleExpression(strExpression string) (Expression, error) {
+	ctx, err := NewExpressionParserCtx(strExpression)
 	ctx.enableShortCircuitEvalIfPossible()
 	err = ctx.parse()
 
