@@ -29,11 +29,34 @@ func binTreeNodeTypeToString(nodeType BinTreeNodeType) string {
 	return "??ERROR??"
 }
 
-type binTreeNode struct {
+type binTreePointers struct {
 	ParentIdx int
-	NodeType  BinTreeNodeType
 	Left      int
 	Right     int
+}
+
+type binTreeNode struct {
+	binTreePointers
+	NodeType BinTreeNodeType
+}
+
+func NewBinTreeNode(nodeType BinTreeNodeType, parent, left, right int) *binTreeNode {
+	node := &binTreeNode{
+		NodeType: nodeType,
+	}
+	node.ParentIdx = parent
+	node.Left = left
+	node.Right = right
+	return node
+}
+
+type binParserTreeNode struct {
+	binTreePointers
+	tokenType ParseTokenType
+}
+
+type binParserTree struct {
+	data []binParserTreeNode
 }
 
 type binTree struct {
@@ -177,6 +200,10 @@ func (tree *binTree) Validate() error {
 	}
 
 	return nil
+}
+
+func (tree *binParserTree) NumNodes() int {
+	return len(tree.data)
 }
 
 func (state *binTreeState) CopyFrom(ostate *binTreeState) {

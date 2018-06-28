@@ -183,6 +183,17 @@ func (val FastVal) Compare(other FastVal) int {
 		return val.compareStrings(other)
 	case JsonStringValue:
 		return val.compareStrings(other)
+	case TrueValue:
+		switch other.Type() {
+		// Json parser right now parses it as a json string value
+		case JsonStringValue:
+			// TODO - fix jsonscanner so it will be a TrueValue too
+			if other.String() == "\"true\"" {
+				return 0
+			} else {
+				return 1
+			}
+		}
 	}
 
 	if val.dataType < other.dataType {

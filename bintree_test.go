@@ -13,36 +13,36 @@ func tCheckNode(t *testing.T, tree *binTreeState, index int, state binTreeStateV
 func BenchmarkBinTree(b *testing.B) {
 	tree := binTree{
 		[]binTreeNode{
-			{
-				0,
+			*NewBinTreeNode(
 				nodeTypeOr,
+				0,
 				1, 2,
-			},
-			{
-				0,
+			),
+			*NewBinTreeNode(
 				nodeTypeLeaf,
-				0, 0,
-			},
-			{
 				0,
+				0, 0,
+			),
+			*NewBinTreeNode(
 				nodeTypeAnd,
+				0,
 				3, 4,
-			},
-			{
-				2,
+			),
+			*NewBinTreeNode(
 				nodeTypeLeaf,
-				0, 0,
-			},
-			{
 				2,
+				0, 0,
+			),
+			*NewBinTreeNode(
 				nodeTypeNot,
+				2,
 				5, 0,
-			},
-			{
-				4,
+			),
+			*NewBinTreeNode(
 				nodeTypeLeaf,
+				4,
 				0, 0,
-			},
+			),
 		},
 	}
 
@@ -66,36 +66,36 @@ func BenchmarkBinTree(b *testing.B) {
 func TestBinTree(t *testing.T) {
 	tree := binTree{
 		[]binTreeNode{
-			{
-				0,
+			*NewBinTreeNode(
 				nodeTypeOr,
+				0,
 				1, 2,
-			},
-			{
-				0,
+			),
+			*NewBinTreeNode(
 				nodeTypeLeaf,
-				0, 0,
-			},
-			{
 				0,
+				0, 0,
+			),
+			*NewBinTreeNode(
 				nodeTypeAnd,
+				0,
 				3, 4,
-			},
-			{
-				2,
+			),
+			*NewBinTreeNode(
 				nodeTypeLeaf,
-				0, 0,
-			},
-			{
 				2,
+				0, 0,
+			),
+			*NewBinTreeNode(
 				nodeTypeNot,
+				2,
 				5, 0,
-			},
-			{
-				4,
+			),
+			*NewBinTreeNode(
 				nodeTypeLeaf,
+				4,
 				0, 0,
-			},
+			),
 		},
 	}
 

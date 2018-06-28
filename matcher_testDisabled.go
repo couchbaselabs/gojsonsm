@@ -129,7 +129,7 @@ func BenchmarkFlexibleMatcher(b *testing.B) {
 	// Expression reformatted:
 	expression, err := govaluate.NewEvaluableExpression("firstName == 'Neil' || (age < 50 && isActive == true)")
 	if err != nil {
-		b.Fatal("NewEvaluableExpression Error: %s", err)
+		b.Fatalf("NewEvaluableExpression Error: %s", err)
 		return
 	}
 
@@ -213,7 +213,7 @@ func TestMatcher(t *testing.T) {
 
 	matchExpression, err := govaluate.NewEvaluableExpression("firstName == 'Brett' || (age < 50 && isActive == true)")
 	if err != nil {
-		t.Fatal("NewEvaluableExpression Error: %s", err)
+		t.Fatalf("NewEvaluableExpression Error: %s", err)
 		return
 	}
 	parameters := NewParameterArray(3)

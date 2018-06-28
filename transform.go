@@ -184,6 +184,7 @@ func (node *ExecNode) makeAfterNode(varID VariableID) *ExecNode {
 
 func (node ExecNode) String() string {
 	var out string
+	out += fmt.Sprintf("Store\n")
 	if node.StoreId > 0 {
 		out += fmt.Sprintf(":store $%d\n", node.StoreId)
 	}
@@ -192,6 +193,9 @@ func (node ExecNode) String() string {
 		out += "\n"
 	}
 
+	out += fmt.Sprintf("Ops: %v\n", node.Ops)
+
+	out += fmt.Sprintf("Elems\n")
 	// For debugging, lets sort the elements by name first
 	var ks []string
 	for k := range node.Elems {
@@ -205,6 +209,7 @@ func (node ExecNode) String() string {
 		out += "\n"
 	}
 
+	out += fmt.Sprintf("Loops\n")
 	if node.Loops != nil {
 		for _, loop := range node.Loops {
 			out += fmt.Sprintf("[%d] :%s:\n", loop.BucketIdx, loopTypeToString(loop.Mode))
@@ -256,12 +261,12 @@ func (t *Transformer) newBucket() BucketID {
 	newBucketIdx := t.BucketIdx
 	t.BucketIdx++
 
-	t.RootTree.data = append(t.RootTree.data, binTreeNode{
-		int(t.ActiveBucketIdx),
+	t.RootTree.data = append(t.RootTree.data, *NewBinTreeNode(
 		nodeTypeLeaf,
+		int(t.ActiveBucketIdx),
 		0,
 		0,
-	})
+	))
 	t.ActiveBucketIdx = newBucketIdx
 	return newBucketIdx
 }
@@ -497,10 +502,7 @@ func (t *Transformer) Transform(exprs []Expression) *MatchDef {
 	t.ActiveBucketIdx = 0
 	t.RootTree = binTree{[]binTreeNode{
 		{
-			0,
-			nodeTypeLeaf,
-			0,
-			0,
+			NodeType: nodeTypeLeaf,
 		},
 	}}
 

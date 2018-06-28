@@ -20,7 +20,7 @@ func genRandomUsers(seed int64, array [][]byte) (int, error) {
 		rand.Seed(itemSeed)
 		fake.Seed(itemSeed)
 
-		registerTime, _ := time.Parse("2006-01-02", fmt.Sprintf("%04d-%02-%02", fake.Year(1950, 2016), fake.MonthNum(), fake.Day()))
+		registerTime, _ := time.Parse("2006-01-02", fmt.Sprintf("%04d-%02d-%02d", fake.Year(1950, 2016), fake.MonthNum(), fake.Day()))
 		user := map[string]interface{}{
 			"id":       rand.Int(),
 			"isActive": rand.Int()%2 == 0,
