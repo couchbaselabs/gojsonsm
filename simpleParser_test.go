@@ -4,8 +4,9 @@ package gojsonsm
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // Makes sure that the parsing of subcontext works
@@ -831,4 +832,19 @@ func TestParserExpressionOutputNeg(t *testing.T) {
 
 	_, err = ctx.outputExpression()
 	assert.NotNil(err)
+}
+
+func TestParserExpressionWithGreaterThan(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "age > 50"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	_, err = ctx.outputExpression()
+	assert.Nil(err)
 }
