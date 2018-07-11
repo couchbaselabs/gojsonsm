@@ -114,3 +114,6 @@ once per thread which is executing.  Thanks to the various other
 optimizations being performed, all variable-length objects which need
 to be stored can be kept as a slice of bytes from the source JSON
 rather than needing to allocate any space.
+
+# License
+Copyright 2018 Couchbase, Inc. All rights reserved.
