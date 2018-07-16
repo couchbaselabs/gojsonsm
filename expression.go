@@ -239,8 +239,3 @@ func (expr GreaterEqualExpr) RootRefs() []FieldExpr {
 	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
 	return out
 }
-
-type InExpr struct {
-	Lhs Expression
-	Rhs []interface{}
-}
