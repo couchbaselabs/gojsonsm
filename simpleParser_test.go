@@ -5,14 +5,12 @@ package gojsonsm
 import (
 	"encoding/json"
 	"fmt"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 // Makes sure that the parsing of subcontext works
 func TestSimpleParserSubContext1(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext1")
 	assert := assert.New(t)
 
 	testString := "true || name.first == 'Neil'"
@@ -35,7 +33,6 @@ func TestSimpleParserSubContext1(t *testing.T) {
 }
 
 func TestSimpleParserSubContext2(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext2")
 	assert := assert.New(t)
 
 	testString := "true && name.first == 'Neil' || age < 50"
@@ -62,7 +59,6 @@ func TestSimpleParserSubContext2(t *testing.T) {
 }
 
 func TestSimpleParserSubContext2a(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext2a")
 	assert := assert.New(t)
 
 	testString := "(true && name.first == 'Neil') || age < 50"
@@ -88,7 +84,6 @@ func TestSimpleParserSubContext2a(t *testing.T) {
 	assert.Equal(8, ctx.parserTree.data[7].Right)
 }
 func TestSimpleParserSubContext3(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext3")
 	assert := assert.New(t)
 
 	testString := "name.first == 'Neil' && age < 50"
@@ -112,7 +107,6 @@ func TestSimpleParserSubContext3(t *testing.T) {
 }
 
 func TestSimpleParserSubContext4(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext4")
 	assert := assert.New(t)
 
 	testString := "name.first == 'Neil' && age < 50 || isActive == true"
@@ -142,7 +136,6 @@ func TestSimpleParserSubContext4(t *testing.T) {
 }
 
 func TestSimpleParserSubContext4a(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext4a")
 	assert := assert.New(t)
 
 	// This should have short circuiting -> name.first should be checked first
@@ -174,7 +167,6 @@ func TestSimpleParserSubContext4a(t *testing.T) {
 }
 
 func TestSimpleParserSubContext4b(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext4b")
 	assert := assert.New(t)
 
 	// Same as 4a but no short circuit eval
@@ -205,7 +197,6 @@ func TestSimpleParserSubContext4b(t *testing.T) {
 }
 
 func TestSimpleParserSubContext5(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext5")
 	assert := assert.New(t)
 
 	testString := "((name.first == 'Neil'))"
@@ -223,7 +214,6 @@ func TestSimpleParserSubContext5(t *testing.T) {
 }
 
 func TestSimpleParserSubContext5a(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext5a")
 	assert := assert.New(t)
 
 	testString := "( name.first == 'Neil')"
@@ -241,7 +231,6 @@ func TestSimpleParserSubContext5a(t *testing.T) {
 }
 
 func TestSimpleParserSubContext6(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext6")
 	assert := assert.New(t)
 
 	testString := "name.first == 'Neil' && (age < 50 || isActive == true)"
@@ -272,7 +261,6 @@ func TestSimpleParserSubContext6(t *testing.T) {
 }
 
 func TestSimpleParserSubContext7(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext7")
 	assert := assert.New(t)
 
 	testString := "(name.first == 'Neil') && (age < 50 || isActive == true)"
@@ -302,7 +290,6 @@ func TestSimpleParserSubContext7(t *testing.T) {
 }
 
 func TestSimpleParserSubContext7a(t *testing.T) {
-	fmt.Println("Running TestSimpleParserSubContext7a")
 	assert := assert.New(t)
 
 	testString := "(name.first == 'Neil' )&& (age < 50 || isActive == true)"
@@ -332,7 +319,6 @@ func TestSimpleParserSubContext7a(t *testing.T) {
 }
 
 func TestContextShortCircuit1(t *testing.T) {
-	fmt.Println("Running TestContextShortCircuit1")
 	assert := assert.New(t)
 	testString := "name.first == 'Neil' || (age < 50) || (true)"
 	ctx, _ := NewExpressionParserCtx(testString)
@@ -342,7 +328,6 @@ func TestContextShortCircuit1(t *testing.T) {
 }
 
 func TestContextShortCircuit2(t *testing.T) {
-	fmt.Println("Running TestContextShortCircuit2")
 	assert := assert.New(t)
 	testString := "name.first == 'Neil' || (age < 50) && (true)"
 	ctx, _ := NewExpressionParserCtx(testString)
@@ -352,7 +337,6 @@ func TestContextShortCircuit2(t *testing.T) {
 }
 
 func TestContextParserToken(t *testing.T) {
-	fmt.Println("Running TestContextParserToken")
 	assert := assert.New(t)
 	testString := "name.first == 'Neil' || (age < 50) || (true)"
 	ctx, err := NewExpressionParserCtx(testString)
@@ -436,7 +420,6 @@ func TestContextParserToken(t *testing.T) {
 }
 
 func TestSimpleParserCompare(t *testing.T) {
-	fmt.Println("Running TestSimpleParserCompare")
 	assert := assert.New(t)
 
 	testString := "something >= somethingElse"
@@ -447,7 +430,6 @@ func TestSimpleParserCompare(t *testing.T) {
 }
 
 func TestParserExpressionOutput(t *testing.T) {
-	fmt.Println("Running TestParserExpressionOutput")
 	assert := assert.New(t)
 
 	matchJson := []byte(`
@@ -478,7 +460,6 @@ func TestParserExpressionOutput(t *testing.T) {
 }
 
 func TestParserExpressionOutput2a(t *testing.T) {
-	fmt.Println("Running TestParserExpressionOutput2a")
 	assert := assert.New(t)
 
 	matchJson := []byte(`
@@ -528,7 +509,6 @@ func TestParserExpressionOutput2a(t *testing.T) {
 	}
 	udMarsh, err := json.Marshal(userData)
 	if err != nil {
-		fmt.Println("ERROR marshalling")
 	}
 	match, err := m.Match(udMarsh)
 	assert.Nil(err)
@@ -536,7 +516,6 @@ func TestParserExpressionOutput2a(t *testing.T) {
 }
 
 func TestParserExpressionOutputNot(t *testing.T) {
-	fmt.Println("Running TestParserExpressionOutputNot")
 	assert := assert.New(t)
 
 	matchJson := []byte(`
@@ -587,7 +566,6 @@ func TestParserExpressionOutputNot(t *testing.T) {
 }
 
 func TestParserExpressionOutputNot2(t *testing.T) {
-	fmt.Println("Running TestParserExpressionOutputNot2")
 	assert := assert.New(t)
 
 	matchJson := []byte(`
@@ -636,7 +614,6 @@ func TestParserExpressionOutputNot2(t *testing.T) {
 }
 
 func TestParserExpressionOutputNot3(t *testing.T) {
-	fmt.Println("Running TestParserExpressionOutputNot3")
 	assert := assert.New(t)
 
 	matchJson := []byte(`
@@ -698,7 +675,6 @@ func TestParserExpressionOutputNot3(t *testing.T) {
 }
 
 func TestParserExpressionOutputGreaterThan(t *testing.T) {
-	fmt.Println("Running TestParserExpressionOutputGreaterThan")
 	assert := assert.New(t)
 
 	matchJson := []byte(`
@@ -758,7 +734,6 @@ func TestParserExpressionOutputGreaterThan(t *testing.T) {
 }
 
 func TestParserExpressionOutputGreaterThanEquals(t *testing.T) {
-	fmt.Println("Running TestParserExpressionOutputGreaterThanEquals")
 	assert := assert.New(t)
 
 	matchJson := []byte(`
@@ -820,7 +795,6 @@ func TestParserExpressionOutputGreaterThanEquals(t *testing.T) {
 }
 
 func TestParserExpressionOutputLessThan(t *testing.T) {
-	fmt.Println("Running TestParserExpressionOutputLessThan")
 	assert := assert.New(t)
 
 	matchJson := []byte(`
@@ -880,7 +854,6 @@ func TestParserExpressionOutputLessThan(t *testing.T) {
 }
 
 func TestParserExpressionOutputLessThanEq(t *testing.T) {
-	fmt.Println("Running TestParserExpressionOutputLessThanEq")
 	assert := assert.New(t)
 
 	matchJson := []byte(`
@@ -943,7 +916,6 @@ func TestParserExpressionOutputLessThanEq(t *testing.T) {
 
 // NEGATIVE test cases
 func TestSimpleParserParenMismatch(t *testing.T) {
-	fmt.Println("Running TestSimpleParserParenMismatch")
 	assert := assert.New(t)
 
 	testString := "(name.first == 'Neil'))"
@@ -954,7 +926,6 @@ func TestSimpleParserParenMismatch(t *testing.T) {
 }
 
 func TestSimpleParserParenMismatch2(t *testing.T) {
-	fmt.Println("Running TestSimpleParserParenMismatch2")
 	assert := assert.New(t)
 
 	testString := "((name.first == 'Neil')"
@@ -965,7 +936,6 @@ func TestSimpleParserParenMismatch2(t *testing.T) {
 }
 
 func TestSimpleParserParenMismatch3(t *testing.T) {
-	fmt.Println("Running TestSimpleParserParenMismatch3")
 	assert := assert.New(t)
 
 	testString := ")>= 3"
@@ -976,7 +946,6 @@ func TestSimpleParserParenMismatch3(t *testing.T) {
 }
 
 func TestSimpleParserParenSyntaxErr(t *testing.T) {
-	fmt.Println("Running TestSimpleParserParenSyntaxErr")
 	assert := assert.New(t)
 
 	testString := "(aField)> 3"
@@ -987,7 +956,6 @@ func TestSimpleParserParenSyntaxErr(t *testing.T) {
 }
 
 func TestSimpleParserParenSyntaxErr2(t *testing.T) {
-	fmt.Println("Running TestSimpleParserParenSyntaxErr2")
 	assert := assert.New(t)
 
 	testString := "(someField == true)&& true"
@@ -999,7 +967,6 @@ func TestSimpleParserParenSyntaxErr2(t *testing.T) {
 
 // Test for when the first token is NOT a field value
 func TestSimpleParserNeg(t *testing.T) {
-	fmt.Println("Running TestSimpleParserNeg")
 	assert := assert.New(t)
 
 	testString := "|| true"
@@ -1010,7 +977,6 @@ func TestSimpleParserNeg(t *testing.T) {
 }
 
 func TestSimpleParserNeg2(t *testing.T) {
-	fmt.Println("Running TestSimpleParserNeg2")
 	assert := assert.New(t)
 
 	testString := "age < Neil == true"
@@ -1021,7 +987,6 @@ func TestSimpleParserNeg2(t *testing.T) {
 }
 
 func TestSimpleParserNeg3(t *testing.T) {
-	fmt.Println("Running TestSimpleParserNeg3")
 	assert := assert.New(t)
 
 	testString := "something >= true"
@@ -1032,7 +997,6 @@ func TestSimpleParserNeg3(t *testing.T) {
 }
 
 func TestSimpleParserNeg4(t *testing.T) {
-	fmt.Println("Running TestSimpleParserNeg4")
 	assert := assert.New(t)
 
 	testString := ">= 2"
@@ -1043,7 +1007,6 @@ func TestSimpleParserNeg4(t *testing.T) {
 }
 
 func TestSimpleParserNeg5(t *testing.T) {
-	fmt.Println("Running TestSimpleParserNeg5")
 	assert := assert.New(t)
 
 	testString := "( true)&&( false)"
@@ -1054,7 +1017,6 @@ func TestSimpleParserNeg5(t *testing.T) {
 }
 
 func TestSimpleParserNeg6(t *testing.T) {
-	fmt.Println("Running TestSimpleParserNeg6")
 	assert := assert.New(t)
 
 	testString := "'Neil' == name.first && 50 > age"
@@ -1065,7 +1027,6 @@ func TestSimpleParserNeg6(t *testing.T) {
 }
 
 func TestSimpleParserNeg7(t *testing.T) {
-	fmt.Println("Running TestSimpleParserNeg7")
 	assert := assert.New(t)
 
 	testString := "abc(def"
@@ -1076,7 +1037,6 @@ func TestSimpleParserNeg7(t *testing.T) {
 }
 
 func TestSimpleParserNeg8(t *testing.T) {
-	fmt.Println("Running TestSimpleParserNeg8")
 	assert := assert.New(t)
 
 	testString := "someField == true &&(def) == false"
@@ -1087,7 +1047,6 @@ func TestSimpleParserNeg8(t *testing.T) {
 }
 
 func TestSimpleParserNeg9(t *testing.T) {
-	fmt.Println("Running TestSimpleParserNeg9")
 	assert := assert.New(t)
 
 	testString := ".somefield == 1"
@@ -1098,7 +1057,6 @@ func TestSimpleParserNeg9(t *testing.T) {
 }
 
 func TestSimpleParserNeg10(t *testing.T) {
-	fmt.Println("Running TestSimpleParserNeg10")
 	assert := assert.New(t)
 
 	testString := "somefield. == 1"
@@ -1109,7 +1067,6 @@ func TestSimpleParserNeg10(t *testing.T) {
 }
 
 func TestParserExpressionOutputNeg(t *testing.T) {
-	fmt.Println("Running TestParserExpressionOutputNeg")
 	assert := assert.New(t)
 
 	emptyString := ""
@@ -1121,8 +1078,6 @@ func TestParserExpressionOutputNeg(t *testing.T) {
 }
 
 func TestParserExpressionWithGreaterThan(t *testing.T) {
-	fmt.Println("Running TestParserExpressionWithGreaterThan")
-
 	assert := assert.New(t)
 
 	strExpr := "age > 50"
