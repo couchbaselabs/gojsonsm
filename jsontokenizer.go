@@ -121,7 +121,7 @@ func (tok *jsonTokenizer) step() (TokenType, []byte, error) {
 					case litTrue:
 						return tknTrue, bytes, nil
 					case litFalse:
-						return tknTrue, bytes, nil
+						return tknFalse, bytes, nil
 					default:
 						panic("unexpected token literal type")
 					}
