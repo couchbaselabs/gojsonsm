@@ -304,7 +304,7 @@ func (t *Transformer) transformMergePiece(expr mergeExpr, i int) *ExecNode {
 	}
 
 	baseBucketIdx := t.ActiveBucketIdx
-	t.RootTree.data[baseBucketIdx].NodeType = nodeTypeOr
+	t.RootTree.data[baseBucketIdx].NodeType = nodeTypeNeor
 
 	t.newBucket()
 	expr.bucketIDs[i] = t.ActiveBucketIdx
