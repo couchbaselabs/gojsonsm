@@ -15,6 +15,7 @@ const (
 	nodeTypeOr
 	nodeTypeAnd
 	nodeTypeNot
+	nodeTypeNeor
 )
 
 func binTreeNodeTypeToString(nodeType BinTreeNodeType) string {
@@ -27,6 +28,8 @@ func binTreeNodeTypeToString(nodeType BinTreeNodeType) string {
 		return "and"
 	case nodeTypeNot:
 		return "not"
+	case nodeTypeNeor:
+		return "neor"
 	}
 	return "??ERROR??"
 }
@@ -147,6 +150,7 @@ func (tree *binTree) validateItem(item int, parent int) (int, error) {
 	case nodeTypeAnd:
 	case nodeTypeOr:
 	case nodeTypeNot:
+	case nodeTypeNeor:
 	default:
 		// Invalid node type
 		return -1, errors.New("unexpected node type")
@@ -256,6 +260,15 @@ func (state *binTreeState) checkNode(index int) {
 			state.MarkNode(index, true)
 		} else if state.data[defNode.Left] == binTreeStateFalse && state.data[defNode.Right] == binTreeStateFalse {
 			state.MarkNode(index, false)
+		}
+		return
+	} else if defNode.NodeType == nodeTypeNeor {
+		if state.data[defNode.Left] != binTreeStateUnknown && state.data[defNode.Right] != binTreeStateUnknown {
+			if state.data[defNode.Left] == binTreeStateTrue || state.data[defNode.Right] == binTreeStateTrue {
+				state.MarkNode(index, true)
+			} else {
+				state.MarkNode(index, false)
+			}
 		}
 		return
 	} else if defNode.NodeType == nodeTypeAnd {
