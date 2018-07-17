@@ -48,15 +48,16 @@ func (expr mergeExpr) RootRefs() []FieldExpr {
 }
 
 type Transformer struct {
-	VarIdx          VariableID
-	BucketIdx       BucketID
-	RootExec        *ExecNode
-	RootTree        binTree
-	NodeMap         map[int]*ExecNode
-	ActiveExec      *ExecNode
-	ActiveBucketIdx BucketID
-	MaxDepth        int
-	CurDepth        int
+	VarIdx              VariableID
+	BucketIdx           BucketID
+	RootExec            *ExecNode
+	RootTree            binTree
+	NodeMap             map[int]*ExecNode
+	ActiveExec          *ExecNode
+	ActiveBucketIdx     BucketID
+	PrevActiveBucketIdx BucketID
+	MaxDepth            int
+	CurDepth            int
 }
 
 type OpType int
@@ -79,19 +80,23 @@ func opTypeToString(value OpType) string {
 	case OpTypeIn:
 		return "in"
 	}
-
 	return "??unknown??"
 }
 
 type OpNode struct {
 	BucketIdx BucketID
 	Op        OpType
+	OpNot     bool
 	Rhs       interface{}
 }
 
 func (op OpNode) String() string {
 	var out string
-	out += fmt.Sprintf("[%d] %s", op.BucketIdx, opTypeToString(op.Op))
+	var opNotStr string
+	if op.OpNot {
+		opNotStr = "not "
+	}
+	out += fmt.Sprintf("[%d] %s%s", op.BucketIdx, opNotStr, opTypeToString(op.Op))
 
 	if op.Rhs != nil {
 		out += " " + fmt.Sprintf("%v", op.Rhs)
@@ -431,6 +436,15 @@ func (t *Transformer) makeRhsParam(expr Expression) interface{} {
 	}
 }
 
+func (t *Transformer) previousNotNode() bool {
+	parentIdx := t.RootTree.data[t.ActiveBucketIdx].ParentIdx
+	if parentIdx >= 0 {
+		potentialNotNode := t.RootTree.data[parentIdx]
+		return potentialNotNode.NodeType == nodeTypeNot
+	}
+	return false
+}
+
 func (t *Transformer) transformEquals(expr EqualsExpr) *ExecNode {
 	if lhsField, ok := expr.Lhs.(FieldExpr); ok {
 		execNode := t.getExecNode(lhsField)
@@ -444,6 +458,7 @@ func (t *Transformer) transformEquals(expr EqualsExpr) *ExecNode {
 		execNode.Ops = append(execNode.Ops, &OpNode{
 			t.ActiveBucketIdx,
 			OpTypeEquals,
+			t.previousNotNode(),
 			t.makeRhsParam(expr.Rhs),
 		})
 	} else {
@@ -466,6 +481,7 @@ func (t *Transformer) transformLessThan(expr LessThanExpr) *ExecNode {
 		execNode.Ops = append(execNode.Ops, &OpNode{
 			t.ActiveBucketIdx,
 			OpTypeLessThan,
+			t.previousNotNode(),
 			t.makeRhsParam(expr.Rhs),
 		})
 	} else {
@@ -488,6 +504,7 @@ func (t *Transformer) transformGreaterEqual(expr GreaterEqualExpr) *ExecNode {
 		execNode.Ops = append(execNode.Ops, &OpNode{
 			t.ActiveBucketIdx,
 			OpTypeGreaterEquals,
+			t.previousNotNode(),
 			t.makeRhsParam(expr.Rhs),
 		})
 	} else {
@@ -513,6 +530,8 @@ func (t *Transformer) transformOne(expr Expression) *ExecNode {
 		return t.transformOr(expr)
 	case AndExpr:
 		return t.transformAnd(expr)
+	case NotExpr:
+		return t.transformNot(expr)
 	case EqualsExpr:
 		return t.transformEquals(expr)
 	case LessThanExpr:

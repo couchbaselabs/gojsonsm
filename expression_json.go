@@ -243,6 +243,8 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonLessThan(data)
 	case "greaterequal":
 		return parseJsonGreaterEquals(data)
+	case "not":
+		return parseJsonNot(data)
 	}
 
 	return nil, errors.New("invalid expression type")

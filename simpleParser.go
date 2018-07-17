@@ -713,6 +713,8 @@ func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expr
 	switch nodeData {
 	case TokenOperatorEqual:
 		return ctx.outputEq(node, pos)
+	case TokenOperatorNotEqual:
+		return ctx.outputNotEq(node, pos)
 	case TokenOperatorOr:
 		return ctx.outputOr(node, pos)
 	case TokenOperatorAnd:
@@ -786,6 +788,19 @@ func (ctx *expressionParserContext) outputEq(node ParserTreeNode, pos int) (Expr
 
 	out.Lhs = leftSubExpr
 	out.Rhs = rightSubExpr
+
+	return out, nil
+}
+
+func (ctx *expressionParserContext) outputNotEq(node ParserTreeNode, pos int) (Expression, error) {
+	var out NotExpr
+
+	subEqualExpr, err := ctx.outputEq(node, pos)
+	if err != nil {
+		return out, err
+	}
+
+	out.SubExpr = subEqualExpr
 
 	return out, nil
 }
