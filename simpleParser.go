@@ -763,7 +763,7 @@ func (ctx *expressionParserContext) outputGreaterEq(node ParserTreeNode, pos int
 		return out, err
 	}
 
-	out = append(out, subLessThanExpr)
+	out.SubExpr = subLessThanExpr
 
 	return out, nil
 }
@@ -798,7 +798,7 @@ func (ctx *expressionParserContext) outputLessThanEq(node ParserTreeNode, pos in
 		return out, err
 	}
 
-	out = append(out, subGreaterThan)
+	out.SubExpr = subGreaterThan
 
 	return out, nil
 }
@@ -832,7 +832,7 @@ func (ctx *expressionParserContext) outputNotEq(node ParserTreeNode, pos int) (E
 		return out, err
 	}
 
-	out = append(out, subEqualExpr)
+	out.SubExpr = subEqualExpr
 
 	return out, nil
 }

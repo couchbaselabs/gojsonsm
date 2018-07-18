@@ -314,6 +314,17 @@ func (t *Transformer) transformMerge(expr mergeExpr) *ExecNode {
 	return t.transformMergePiece(expr, 0)
 }
 
+func (t *Transformer) transformNot(expr NotExpr) *ExecNode {
+	baseBucketIdx := t.ActiveBucketIdx
+	t.RootTree.data[baseBucketIdx].NodeType = nodeTypeNot
+
+	t.newBucket()
+	t.RootTree.data[baseBucketIdx].Left = int(t.ActiveBucketIdx)
+	t.transformOne(expr.SubExpr)
+
+	return nil
+}
+
 func (t *Transformer) transformOr(expr OrExpr) *ExecNode {
 	if len(expr) == 1 {
 		return t.transformOne(expr[0])
@@ -330,21 +341,6 @@ func (t *Transformer) transformOr(expr OrExpr) *ExecNode {
 	t.newBucket()
 	t.RootTree.data[baseBucketIdx].Right = int(t.ActiveBucketIdx)
 	t.transformOr(expr[1:])
-
-	return nil
-}
-
-func (t *Transformer) transformNot(expr NotExpr) *ExecNode {
-	if len(expr) > 1 {
-		return t.transformOne(expr[0])
-	}
-
-	baseBucketIdx := t.ActiveBucketIdx
-	t.RootTree.data[baseBucketIdx].NodeType = nodeTypeNot
-
-	t.newBucket()
-	t.RootTree.data[baseBucketIdx].Left = int(t.ActiveBucketIdx)
-	t.transformOne(expr[0])
 
 	return nil
 }
@@ -528,12 +524,12 @@ func (t *Transformer) transformOne(expr Expression) *ExecNode {
 		return t.transformEveryIn(expr)
 	case AnyEveryInExpr:
 		return t.transformAnyEveryIn(expr)
+	case NotExpr:
+		return t.transformNot(expr)
 	case OrExpr:
 		return t.transformOr(expr)
 	case AndExpr:
 		return t.transformAnd(expr)
-	case NotExpr:
-		return t.transformNot(expr)
 	case EqualsExpr:
 		return t.transformEquals(expr)
 	case LessThanExpr:

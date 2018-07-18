@@ -132,8 +132,8 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 					opRes = litVal.Equals(opVal)
 				} else if op.Op == OpTypeLessThan {
 					opRes = litVal.Compare(opVal) < 0
-				} else if op.Op == OpTypeGreaterEquals {
-					opRes = litVal.Compare(opVal) >= 0
+				} else if op.Op == OpTypeGreaterThan {
+					opRes = litVal.Compare(opVal) > 0
 				} else {
 					panic("invalid op type")
 				}

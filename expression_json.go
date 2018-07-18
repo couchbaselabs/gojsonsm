@@ -103,6 +103,24 @@ func parseJsonGreaterThan(data []interface{}) (Expression, error) {
 	return GreaterThanExpr{lhs, rhs}, nil
 }
 
+func parseJsonNot(data []interface{}) (Expression, error) {
+	var out NotExpr
+
+	subexprData, ok := data[1].([]interface{})
+	if !ok {
+		return nil, errors.New("invalid not expression format")
+	}
+
+	subexpr, err := parseJsonSubexpr(subexprData)
+	if err != nil {
+		return nil, err
+	}
+
+	out.SubExpr = subexpr
+
+	return out, nil
+}
+
 func parseJsonOr(data []interface{}) (Expression, error) {
 	var out OrExpr
 	for i := 1; i < len(data); i++ {
@@ -118,19 +136,6 @@ func parseJsonOr(data []interface{}) (Expression, error) {
 
 		out = append(out, subexpr)
 	}
-	return out, nil
-}
-
-func parseJsonNot(data []interface{}) (Expression, error) {
-	var out NotExpr
-	if len(data) != 2 {
-		return nil, errors.New("invalid not expression format")
-	}
-	subexpr, err := parseJsonSubexpr(data[1].([]interface{}))
-	if err != nil {
-		return nil, err
-	}
-	out = append(out, subexpr)
 	return out, nil
 }
 
@@ -220,6 +225,8 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonValue(data)
 	case "field":
 		return parseJsonField(data)
+	case "not":
+		return parseJsonNot(data)
 	case "or":
 		return parseJsonOr(data)
 	case "and":
@@ -236,8 +243,6 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonLessThan(data)
 	case "greaterthan":
 		return parseJsonGreaterThan(data)
-	case "not":
-		return parseJsonNot(data)
 	}
 
 	return nil, errors.New("invalid expression type")
