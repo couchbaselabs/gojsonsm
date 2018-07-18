@@ -151,10 +151,10 @@ type MatchDef struct {
 
 func (def MatchDef) String() string {
 	var out string
-	out += "parse tree:\n"
+	out += "match tree:\n"
 	out += reindentString(def.ParseNode.String(), "  ")
 	out += "\n"
-	out += "match tree:\n"
+	out += "bin tree:\n"
 	out += reindentString(def.MatchTree.String(), "  ")
 	out += "\n"
 	out += "match buckets:\n"
@@ -191,33 +191,37 @@ func (node *ExecNode) makeAfterNode(varID VariableID) *ExecNode {
 
 func (node ExecNode) String() string {
 	var out string
-	out += fmt.Sprintf("Store\n")
 	if node.StoreId > 0 {
 		out += fmt.Sprintf(":store $%d\n", node.StoreId)
 	}
-	for _, op := range node.Ops {
-		out += op.String()
-		out += "\n"
+
+	if len(node.Ops) > 0 {
+		out += fmt.Sprintf(":ops\n")
+		for _, op := range node.Ops {
+			out += reindentString(op.String(), "  ")
+			out += "\n"
+		}
 	}
 
-	out += fmt.Sprintf("Ops: %v\n", node.Ops)
-
-	out += fmt.Sprintf("Elems\n")
 	// For debugging, lets sort the elements by name first
 	var ks []string
 	for k := range node.Elems {
 		ks = append(ks, k)
 	}
 	sort.Strings(ks)
-	for _, k := range ks {
-		elem := node.Elems[k]
-		out += fmt.Sprintf("`%s`:\n", k)
-		out += reindentString(elem.String(), "  ")
-		out += "\n"
+	if len(ks) > 0 {
+		out += fmt.Sprintf(":elems\n")
+
+		for _, k := range ks {
+			elem := node.Elems[k]
+			out += fmt.Sprintf("  `%s`:\n", k)
+			out += reindentString(elem.String(), "    ")
+			out += "\n"
+		}
 	}
 
-	out += fmt.Sprintf("Loops\n")
 	if node.Loops != nil {
+		out += fmt.Sprintf(":loops\n")
 		for _, loop := range node.Loops {
 			out += fmt.Sprintf("[%d] :%s:\n", loop.BucketIdx, loopTypeToString(loop.Mode))
 

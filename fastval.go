@@ -47,27 +47,27 @@ func (val FastVal) String() string {
 	case MissingValue:
 		return "missing"
 	case IntValue:
-		return fmt.Sprintf("%d", val.GetInt())
+		return "(int)" + fmt.Sprintf("%d", val.GetInt())
 	case UintValue:
-		return fmt.Sprintf("%d", val.GetUint())
-	case JsonIntValue:
-		return string(val.sliceData)
-	case JsonUintValue:
-		return string(val.sliceData)
+		return "(uint)" + fmt.Sprintf("%d", val.GetUint())
 	case FloatValue:
-		return fmt.Sprintf("%f", val.GetFloat())
+		return "(float)" + fmt.Sprintf("%f", val.GetFloat())
+	case JsonIntValue:
+		return "(jsonInt)" + string(val.sliceData)
+	case JsonUintValue:
+		return "(jsonUint)" + string(val.sliceData)
 	case JsonFloatValue:
-		return string(val.sliceData)
+		return "(jsonFloat)" + string(val.sliceData)
 	case StringValue:
-		return val.data.(string)
+		return "(string)" + val.data.(string)
 	case BinStringValue:
 		tmpVal, _ := val.AsBinString()
-		return fmt.Sprintf(`"%s"`, tmpVal.sliceData)
+		return "(binString)" + fmt.Sprintf(`"%s"`, tmpVal.sliceData)
 	case JsonStringValue:
 		tmpVal, _ := val.AsBinString()
-		return fmt.Sprintf(`"%s"`, tmpVal.sliceData)
+		return "(jsonString)" + fmt.Sprintf(`"%s"`, tmpVal.sliceData)
 	case BinaryValue:
-		return fmt.Sprintf(`"%s"`, val.sliceData)
+		return "(bin)" + fmt.Sprintf(`"%s"`, val.sliceData)
 	case NullValue:
 		return "null"
 	case TrueValue:
