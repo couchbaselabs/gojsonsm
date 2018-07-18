@@ -81,6 +81,24 @@ func (expr ValueExpr) RootRefs() []FieldExpr {
 	return nil
 }
 
+type NotExpr []Expression
+
+func (expr NotExpr) String() string {
+	if len(expr) == 0 {
+		return "%%ERROR%%"
+	} else {
+		return "NOT " + expr[0].String()
+	}
+}
+
+func (expr NotExpr) RootRefs() []FieldExpr {
+	var out []FieldExpr
+	for _, subexpr := range expr {
+		out = rootSetAdd(out, subexpr.RootRefs()...)
+	}
+	return out
+}
+
 type AndExpr []Expression
 
 func (expr AndExpr) String() string {
@@ -224,16 +242,16 @@ func (expr LessThanExpr) RootRefs() []FieldExpr {
 	return out
 }
 
-type GreaterEqualExpr struct {
+type GreaterThanExpr struct {
 	Lhs Expression
 	Rhs Expression
 }
 
-func (expr GreaterEqualExpr) String() string {
-	return fmt.Sprintf("%s >= %s", expr.Lhs, expr.Rhs)
+func (expr GreaterThanExpr) String() string {
+	return fmt.Sprintf("%s > %s", expr.Lhs, expr.Rhs)
 }
 
-func (expr GreaterEqualExpr) RootRefs() []FieldExpr {
+func (expr GreaterThanExpr) RootRefs() []FieldExpr {
 	var out []FieldExpr
 	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
 	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
