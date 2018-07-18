@@ -106,56 +106,51 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 	endPos := -1
 
 	if isLiteralToken(token) {
-		//		fmt.Printf("NEIL DEBUG isLiteral token type: %v tokenData: %s\n", token, string(tokenData[:]))
 		var litParse fastLitParser
+
+		// TODO(brett19): Move the litVal generation to be lazy-evaluated by the
+		// op execution below so we avoid performing any translations when the op
+		// is already resolved by something else.
+
+		// Parse the literal token from the tokenizer into a FastVal value
+		// to be used for op execution below.
 		litVal := litParse.Parse(token, tokenData)
 
-		//		fmt.Printf("LITERAL: `%v` %d %v\n", litVal, token, tokenData)
 		for _, op := range node.Ops {
-			//			log.Printf("CHECK: %s %v", op.Op, op.Params)
-			//			fmt.Printf("CHECK: %s\n", op.String())
-
-			/*
-				if m.buckets.IsResolved(0) && !m.buckets.IsTrue(0) {
-					return nil
-				}
-			*/
-
 			if m.buckets.IsResolved(int(op.BucketIdx)) {
-				// fmt.Printf("NEIL DEBUG bucketId: %v already resolved\n", op.BucketIdx)
-				//				log.Printf("SKIPPED CHECK")
+				// If the bucket for this op is already resolved  in the binary tree,
+				// we don't need to perform the op and can just skip it.
+				continue
 			} else {
 				var opVal FastVal
 				if op.Rhs != nil {
 					opVal = m.resolveParam(op.Rhs)
 				}
 
+				var opRes bool
 				if op.Op == OpTypeEquals {
-					opRes := litVal.Equals(opVal)
-					//					fmt.Printf("NEIL DEBUG fix equal type: %v RHS type %v\n", litVal.Type(), opVal.Type())
-					//					fmt.Printf("NEIL DEBUG Marking bucket %v op: %v rhs: %v OpRes: %v\n",
-					//						op.BucketIdx, opVal, op.Rhs, opRes)
-					m.buckets.MarkNode(int(op.BucketIdx), opRes)
+					opRes = litVal.Equals(opVal)
 				} else if op.Op == OpTypeLessThan {
-					opRes := litVal.Compare(opVal) < 0
-					//					fmt.Printf("NEIL DEBUG Marking bucket %v op: %v rhs: %v OpRes: %v\n",
-					//						op.BucketIdx, opVal, op.Rhs, opRes)
-					m.buckets.MarkNode(int(op.BucketIdx), opRes)
-				} else if op.Op == OpTypeGreaterThan {
-					opRes := litVal.Compare(opVal) > 0
-					//					fmt.Printf("NEIL DEBUG opVal: %v litVal: %v litValDataType: %v\n", opVal, litVal, litVal.dataType)
-					//					fmt.Printf("NEIL DEBUG Marking bucket %v op: %v rhs: %v OpRes: %v\n",
-					//						op.BucketIdx, opVal, op.Rhs, opRes)
-					m.buckets.MarkNode(int(op.BucketIdx), opRes)
+					opRes = litVal.Compare(opVal) < 0
+				} else if op.Op == OpTypeGreaterEquals {
+					opRes = litVal.Compare(opVal) >= 0
+				} else {
+					panic("invalid op type")
+				}
+
+				// Mark the result of this operation
+				m.buckets.MarkNode(int(op.BucketIdx), opRes)
+
+				// Check if running this values ops has resolved the entirety
+				// of the expression, if so we can leave immediately.
+				if m.buckets.IsResolved(0) {
+					return nil
 				}
 			}
 		}
 
 		return nil
-	}
-
-	if token == tknObjectStart {
-		//		fmt.Printf("NEIL DEBUG tknObjectStart token type: %v tokenData: %s\n", token, tokenData)
+	} else if token == tknObjectStart {
 		var keyLitParse fastLitParser
 
 		for {
@@ -182,20 +177,22 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 			}
 
 			if keyElem, ok := node.Elems[string(keyBytes)]; ok {
-				//	fmt.Printf("MATCH ELEM: %s token: %v tokenData: %v\n", keyBytes, token, tokenData)
+				// Run the execution node that applies to this particular
+				// key of the object.
 				m.matchExec(token, tokenData, keyElem)
+
+				// Check if running this keys execution has resolved the entirety
+				// of the expression, if so we can leave immediately.
+				if m.buckets.IsResolved(0) {
+					return nil
+				}
 			} else {
-				//log.Printf("SKIP ELEM: %s", keyBytes)
+				// If we don't have any parse requirements for this key in
+				// the object, we can just skip its value and continue
 				m.skipValue(token)
 			}
-
-			if m.buckets.IsResolved(0) {
-				return nil
-			}
 		}
-	}
-
-	if token == tknArrayStart {
+	} else if token == tknArrayStart {
 		for i := 0; ; i++ {
 			token, _, err := m.tokens.step()
 			if err != nil {
@@ -206,16 +203,12 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 				return nil
 			}
 
-			//log.Printf("ARRAY ELEM: %s", tokenData)
-
+			// TODO(brett19): We need to handle looping over arrays here.  Right
+			// now we just ignore the array in its entirety, this is incorrect.
 			m.skipValue(token)
-
-			/*
-				if m.buckets.IsResolved(0) && !m.buckets.IsTrue(0) {
-					return nil
-				}
-			*/
 		}
+	} else {
+		panic("invalid token read")
 	}
 
 	endPos = m.tokens.pos
@@ -225,7 +218,7 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 		varData.size = endPos - startPos
 	}
 
-	panic("Invalid token read")
+	return nil
 }
 
 func (m *Matcher) Match(data []byte) (bool, error) {
