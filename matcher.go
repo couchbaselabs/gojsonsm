@@ -366,7 +366,6 @@ func (m *Matcher) Match(data []byte) (bool, error) {
 		return false, err
 	}
 
-	//	fmt.Printf("Parse node: %v\n", m.def.ParseNode)
 	err = m.matchExec(token, tokenData, m.def.ParseNode)
 	if err != nil {
 		return false, err
