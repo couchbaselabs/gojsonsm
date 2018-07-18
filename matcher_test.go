@@ -141,6 +141,22 @@ func TestMatcherFalseEquals(t *testing.T) {
 	})
 }
 
+func TestMatcherNotTrueEquals(t *testing.T) {
+	runJSONExprMatchTest(t, `
+	  ["not",
+	    ["equals",
+		  ["field", "isActive"],
+		  ["value", true]
+	    ]
+	  ]
+	`, []string{
+		"5b47eb096b1d911c0b9492fb",
+		"5b47eb093771f06ced629663",
+		"5b47eb09ffac5a6ce37042e7",
+		"5b47eb091f57571d3c3b1aa1",
+	})
+}
+
 func TestMatcherDisparateTypeEquals(t *testing.T) {
 	// TODO(brett19): Should probably discuss whether type-cast equals
 	// actually makes sense... This validates that these something like:

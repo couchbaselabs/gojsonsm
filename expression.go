@@ -81,6 +81,18 @@ func (expr ValueExpr) RootRefs() []FieldExpr {
 	return nil
 }
 
+type NotExpr struct {
+	SubExpr Expression
+}
+
+func (expr NotExpr) String() string {
+	return "NOT " + expr.SubExpr.String()
+}
+
+func (expr NotExpr) RootRefs() []FieldExpr {
+	return expr.SubExpr.RootRefs()
+}
+
 type AndExpr []Expression
 
 func (expr AndExpr) String() string {
