@@ -65,7 +65,7 @@ type OpType int
 const (
 	OpTypeEquals OpType = iota
 	OpTypeLessThan
-	OpTypeGreaterEquals
+	OpTypeGreaterThan
 	OpTypeIn
 )
 
@@ -75,8 +75,8 @@ func opTypeToString(value OpType) string {
 		return "eq"
 	case OpTypeLessThan:
 		return "lt"
-	case OpTypeGreaterEquals:
-		return "gte"
+	case OpTypeGreaterThan:
+		return "gt"
 	case OpTypeIn:
 		return "in"
 	}
@@ -479,7 +479,7 @@ func (t *Transformer) transformLessThan(expr LessThanExpr) *ExecNode {
 	return nil
 }
 
-func (t *Transformer) transformGreaterEqual(expr GreaterEqualExpr) *ExecNode {
+func (t *Transformer) transformGreaterThan(expr GreaterThanExpr) *ExecNode {
 	if lhsField, ok := expr.Lhs.(FieldExpr); ok {
 		execNode := t.getExecNode(lhsField)
 
@@ -491,7 +491,7 @@ func (t *Transformer) transformGreaterEqual(expr GreaterEqualExpr) *ExecNode {
 
 		execNode.Ops = append(execNode.Ops, &OpNode{
 			t.ActiveBucketIdx,
-			OpTypeGreaterEquals,
+			OpTypeGreaterThan,
 			t.previousNotNode(),
 			t.makeRhsParam(expr.Rhs),
 		})
@@ -518,8 +518,8 @@ func (t *Transformer) transformOne(expr Expression) *ExecNode {
 		return t.transformEquals(expr)
 	case LessThanExpr:
 		return t.transformLessThan(expr)
-	case GreaterEqualExpr:
-		return t.transformGreaterEqual(expr)
+	case GreaterThanExpr:
+		return t.transformGreaterThan(expr)
 	}
 	return nil
 }
