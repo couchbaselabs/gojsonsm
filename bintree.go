@@ -31,6 +31,14 @@ func binTreeNodeTypeToString(nodeType BinTreeNodeType) string {
 	return "??ERROR??"
 }
 
+func binTreeNodeTypeHasLeft(nodeType BinTreeNodeType) bool {
+	return nodeType != nodeTypeLeaf
+}
+
+func binTreeNodeTypeHasRight(nodeType BinTreeNodeType) bool {
+	return nodeType != nodeTypeLeaf && nodeType != nodeTypeNot
+}
+
 type binTreePointers struct {
 	ParentIdx int
 	Left      int
@@ -218,8 +226,10 @@ func (state *binTreeState) CopyFrom(ostate *binTreeState) {
 	}
 }
 
-func (state *binTreeState) SetStallIndex(index int) {
+func (state *binTreeState) SetStallIndex(index int) int {
+	oldStallIndex := state.stallIndex
 	state.stallIndex = index
+	return oldStallIndex
 }
 
 func (state *binTreeState) Reset() {
@@ -229,18 +239,38 @@ func (state *binTreeState) Reset() {
 	}
 }
 
+func (state *binTreeState) resetNodeRecursive(index int) {
+	// TODO(brett19): This is technically quite slow.  It would be ideal if
+	// the binary tree itself marked the end of each node so we could do a
+	// quick loop through all the entries at once.
+
+	state.data[index] = binTreeStateUnknown
+
+	defNode := state.tree.data[index]
+	if binTreeNodeTypeHasLeft(defNode.NodeType) {
+		state.resetNodeRecursive(defNode.Left)
+	}
+	if binTreeNodeTypeHasRight(defNode.NodeType) {
+		state.resetNodeRecursive(defNode.Right)
+	}
+}
+
+func (state *binTreeState) ResetNode(index int) {
+	state.resetNodeRecursive(index)
+}
+
 func (state *binTreeState) resolveRecursive(index int) {
 	defNode := state.tree.data[index]
-	if defNode.NodeType != nodeTypeLeaf {
+	if binTreeNodeTypeHasLeft(defNode.NodeType) {
 		if state.data[defNode.Left] == binTreeStateUnknown {
 			state.data[defNode.Left] = binTreeStateResolved
 			state.resolveRecursive(defNode.Left)
 		}
-		if defNode.NodeType != nodeTypeNot {
-			if state.data[defNode.Right] == binTreeStateUnknown {
-				state.data[defNode.Right] = binTreeStateResolved
-				state.resolveRecursive(defNode.Right)
-			}
+	}
+	if binTreeNodeTypeHasRight(defNode.NodeType) {
+		if state.data[defNode.Right] == binTreeStateUnknown {
+			state.data[defNode.Right] = binTreeStateResolved
+			state.resolveRecursive(defNode.Right)
 		}
 	}
 }
@@ -291,6 +321,11 @@ func (state *binTreeState) MarkNode(index int, value bool) {
 
 	// We are done if we are the root node
 	if index == 0 {
+		return
+	}
+
+	// If we are the marked stall index, we should stop recursing.
+	if index == state.stallIndex {
 		return
 	}
 

@@ -349,8 +349,8 @@ func (t *Transformer) transformAnd(expr AndExpr) *ExecNode {
 	return nil
 }
 
-func (t *Transformer) transformAnyIn(expr AnyInExpr) *ExecNode {
-	if rhsField, ok := expr.InExpr.(FieldExpr); ok {
+func (t *Transformer) transformLoop(loopType LoopType, varID int, inExpr, subExpr Expression) *ExecNode {
+	if rhsField, ok := inExpr.(FieldExpr); ok {
 		newNode := &ExecNode{}
 		execNode := t.getExecNode(rhsField)
 
@@ -359,7 +359,7 @@ func (t *Transformer) transformAnyIn(expr AnyInExpr) *ExecNode {
 		// need to pull the whole loop out to the after block
 		// to guarentee that all data dependencies have been
 		// resolved and are available.
-		subRootRefs := expr.SubExpr.RootRefs()
+		subRootRefs := subExpr.RootRefs()
 		if len(subRootRefs) > 0 {
 			storeId := execNode.makeStored(t)
 			execNode = t.ActiveExec.makeAfterNode(storeId)
@@ -367,7 +367,7 @@ func (t *Transformer) transformAnyIn(expr AnyInExpr) *ExecNode {
 
 		execNode.Loops = append(execNode.Loops, LoopNode{
 			t.ActiveBucketIdx,
-			LoopTypeAny,
+			loopType,
 			newNode,
 		})
 
@@ -379,9 +379,9 @@ func (t *Transformer) transformAnyIn(expr AnyInExpr) *ExecNode {
 			t.MaxDepth = t.CurDepth
 		}
 
-		t.NodeMap[expr.VarId] = newNode
+		t.NodeMap[varID] = newNode
 
-		t.transformOne(expr.SubExpr)
+		t.transformOne(subExpr)
 
 		t.CurDepth--
 		t.ActiveExec = oldActiveExec
@@ -390,6 +390,18 @@ func (t *Transformer) transformAnyIn(expr AnyInExpr) *ExecNode {
 	}
 
 	return nil
+}
+
+func (t *Transformer) transformAnyIn(expr AnyInExpr) *ExecNode {
+	return t.transformLoop(LoopTypeAny, expr.VarId, expr.InExpr, expr.SubExpr)
+}
+
+func (t *Transformer) transformEveryIn(expr EveryInExpr) *ExecNode {
+	return t.transformLoop(LoopTypeEvery, expr.VarId, expr.InExpr, expr.SubExpr)
+}
+
+func (t *Transformer) transformAnyEveryIn(expr AnyEveryInExpr) *ExecNode {
+	return t.transformLoop(LoopTypeAnyEvery, expr.VarId, expr.InExpr, expr.SubExpr)
 }
 
 func (t *Transformer) makeRhsParam(expr Expression) interface{} {
@@ -480,6 +492,10 @@ func (t *Transformer) transformOne(expr Expression) *ExecNode {
 		return t.transformMerge(expr)
 	case AnyInExpr:
 		return t.transformAnyIn(expr)
+	case EveryInExpr:
+		return t.transformEveryIn(expr)
+	case AnyEveryInExpr:
+		return t.transformAnyEveryIn(expr)
 	case OrExpr:
 		return t.transformOr(expr)
 	case AndExpr:
