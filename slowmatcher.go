@@ -9,14 +9,14 @@ import (
 )
 
 type SlowMatcher struct {
-	exprs []Expression
+	exprs       []Expression
 	exprMatches []bool
-	vars map[int]interface{}
+	vars        map[int]interface{}
 }
 
 func NewSlowMatcher(exprs []Expression) *SlowMatcher {
 	return &SlowMatcher{
-		exprs: exprs,
+		exprs:       exprs,
 		exprMatches: make([]bool, len(exprs)),
 	}
 }
@@ -193,13 +193,13 @@ func (m *SlowMatcher) matchLessThanExpr(expr LessThanExpr) (bool, error) {
 	return val < 0, nil
 }
 
-func (m *SlowMatcher) matchGreaterEqualExpr(expr GreaterEqualExpr) (bool, error) {
+func (m *SlowMatcher) matchGreaterThanExpr(expr GreaterThanExpr) (bool, error) {
 	val, err := m.compareExprs(expr.Lhs, expr.Rhs)
 	if err != nil {
 		return false, err
 	}
 
-	return val >= 0, nil
+	return val > 0, nil
 }
 
 func (m *SlowMatcher) matchOne(expr Expression) (bool, error) {
@@ -214,8 +214,8 @@ func (m *SlowMatcher) matchOne(expr Expression) (bool, error) {
 		return m.matchEqualsExpr(expr)
 	case LessThanExpr:
 		return m.matchLessThanExpr(expr)
-	case GreaterEqualExpr:
-		return m.matchGreaterEqualExpr(expr)
+	case GreaterThanExpr:
+		return m.matchGreaterThanExpr(expr)
 	}
 
 	panic("unexpected expression")

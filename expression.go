@@ -242,16 +242,16 @@ func (expr LessThanExpr) RootRefs() []FieldExpr {
 	return out
 }
 
-type GreaterEqualExpr struct {
+type GreaterThanExpr struct {
 	Lhs Expression
 	Rhs Expression
 }
 
-func (expr GreaterEqualExpr) String() string {
-	return fmt.Sprintf("%s >= %s", expr.Lhs, expr.Rhs)
+func (expr GreaterThanExpr) String() string {
+	return fmt.Sprintf("%s > %s", expr.Lhs, expr.Rhs)
 }
 
-func (expr GreaterEqualExpr) RootRefs() []FieldExpr {
+func (expr GreaterThanExpr) RootRefs() []FieldExpr {
 	var out []FieldExpr
 	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
 	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
