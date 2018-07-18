@@ -193,19 +193,125 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 			}
 		}
 	} else if token == tknArrayStart {
-		for i := 0; ; i++ {
-			token, _, err := m.tokens.step()
-			if err != nil {
-				return err
-			}
-
-			if token == tknArrayEnd {
-				return nil
-			}
-
-			// TODO(brett19): We need to handle looping over arrays here.  Right
-			// now we just ignore the array in its entirety, this is incorrect.
+		if len(node.Loops) == 0 {
+			// If we have no loop handlers, we can just skip the whole thing...
 			m.skipValue(token)
+		} else {
+			// TODO(brett19): We need to improve this.  The scanner/tokenizer actually
+			// has a bunch of behind-the-scenes state that we need to be cautious of.  In
+			// this case, because we always stop at the edge of a value, process that
+			// value and then return to the begining, the internal stacks are identical
+			// and we don't need to worry about it.  This is extremely dangerous and very
+			// prone to being broken in the future though.  State saving needs to be more
+			// inclusive, or the tokenizer needs to be modified to not need internal state.
+			savePos := m.tokens.pos
+
+			for loopIdx, loop := range node.Loops {
+				if loopIdx != 0 {
+					// If this is not the first loop, we will need to reset back to the
+					// begining of the array the loops are scanning.  In the future, perhaps
+					// we can add support for parallel ExecNode handling and do it in one pass.
+					m.tokens.seek(savePos)
+				}
+
+				// We need to keep track of the overall loop result value while the bin tree
+				// is being iterated on, reset, etc...
+				var loopState bool
+				if loop.Mode == LoopTypeAny {
+					loopState = false
+				} else if loop.Mode == LoopTypeEvery {
+					loopState = true
+				} else if loop.Mode == LoopTypeAnyEvery {
+					loopState = false
+				} else {
+					panic("invalid loop mode")
+				}
+
+				loopBucketIdx := int(loop.BucketIdx)
+
+				// We need to mark the stall index on our binary tree so that
+				// resolution of a loop iteration does not propagate up the tree
+				// and cause resolution of the entire expression.
+				previousStallIndex := m.buckets.SetStallIndex(loopBucketIdx)
+
+				// Scan through all the values in the loop
+				for i := 0; ; i++ {
+					token, tokenData, err := m.tokens.step()
+					if err != nil {
+						return err
+					}
+
+					if token == tknArrayEnd {
+						break
+					}
+
+					// Reset the looping node in the binary tree so that previous iterations
+					// of the loop do not impact the results of this iteration
+					m.buckets.ResetNode(loopBucketIdx)
+
+					// Run the execution node for this element of the array.
+					m.matchExec(token, tokenData, loop.Node)
+
+					iterationMatched := m.buckets.IsTrue(loopBucketIdx)
+					if loop.Mode == LoopTypeAny {
+						if iterationMatched {
+							// If any element of the array matches, we know that
+							// this loop is successful
+							loopState = true
+
+							// Skip the remainder of the array and leave the loop
+							m.leaveValue()
+							break
+						}
+					} else if loop.Mode == LoopTypeEvery {
+						if !iterationMatched {
+							// If any element of the array does not match, we know that
+							// this loop will never match
+							loopState = false
+
+							// Skip the remainder of the array and leave the loop
+							m.leaveValue()
+							break
+						}
+					} else if loop.Mode == LoopTypeAnyEvery {
+						if !iterationMatched {
+							// If any element of the array does not match, we know that
+							// this loop will never match the `every` semantic.
+							loopState = false
+
+							// Skip the remainder of the array and leave the loop
+							m.leaveValue()
+							break
+						} else {
+							// If we encounter a truthy value, we have satisfied the 'any'
+							// semantics of this loop and should mark it as such.
+							loopState = true
+
+							// We must continue looping to satisfy the 'every' portion.
+						}
+					}
+				}
+
+				// We have to reset the node before we can mark it or our double-marking
+				// protection on the binary tree will trigger, this helpfully also marks
+				// the children of the loop to undefined resolution, which makes more sense
+				// then it having the state of the last iteration of the loop.
+				m.buckets.ResetNode(loopBucketIdx)
+
+				// Reset the stall index to whatever it used to be to exit the 'context'
+				// of this particular loop.  This acts as a stack in case there are
+				// multiple nested loops being processed.
+				m.buckets.SetStallIndex(previousStallIndex)
+
+				// Apply the overall loop result to the binary tree
+				m.buckets.MarkNode(loopBucketIdx, loopState)
+
+				// Check if the entire expression has been resolved, if so we can simply
+				// exit the entire set of looping
+				if m.buckets.IsResolved(0) {
+					return nil
+				}
+			}
 		}
 	} else {
 		panic("invalid token read")

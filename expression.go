@@ -210,6 +210,24 @@ func (expr EveryInExpr) RootRefs() []FieldExpr {
 	return out
 }
 
+type AnyEveryInExpr struct {
+	VarId   int
+	InExpr  Expression
+	SubExpr Expression
+}
+
+func (expr AnyEveryInExpr) String() string {
+	exprStr := reindentString(expr.SubExpr.String(), "  ")
+	return fmt.Sprintf("any and every $%d in %s\n%s\nend", expr.VarId, expr.InExpr, exprStr)
+}
+
+func (expr AnyEveryInExpr) RootRefs() []FieldExpr {
+	var out []FieldExpr
+	out = rootSetAdd(out, expr.InExpr.RootRefs()...)
+	out = rootSetAdd(out, expr.SubExpr.RootRefs()...)
+	return out
+}
+
 type EqualsExpr struct {
 	Lhs Expression
 	Rhs Expression
