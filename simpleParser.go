@@ -720,17 +720,20 @@ func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expr
 	case TokenOperatorAnd:
 		return ctx.outputAnd(node, pos)
 	case TokenOperatorGreaterThanEq:
-		return ctx.outputGreaterEquals(node, pos)
+		return nil, nil // TODO
+		//		return ctx.outputGreaterEquals(node, pos)
 	case TokenOperatorLessThan:
 		return ctx.outputLessThan(node, pos)
+	case TokenOperatorGreaterThan:
+		return ctx.outputGreaterThan(node, pos)
 	default:
 		return emptyExpression, fmt.Errorf("Error: Invalid op type: %s", nodeData)
 	}
 }
 
 // Various outputOp types methods
-func (ctx *expressionParserContext) outputGreaterEquals(node ParserTreeNode, pos int) (Expression, error) {
-	var out GreaterEqualExpr
+func (ctx *expressionParserContext) outputGreaterThan(node ParserTreeNode, pos int) (Expression, error) {
+	var out GreaterThanExpr
 	leftNode, leftPos := ctx.getLeftOutputNode(pos)
 	rightNode, rightPos := ctx.getRightOutputNode(pos)
 
