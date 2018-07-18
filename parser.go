@@ -139,33 +139,60 @@ func parseJsonAnd(data []interface{}) (Expression, error) {
 	return out, nil
 }
 
-func parseJsonAnyIn(data []interface{}) (Expression, error) {
+func parseJsonLoop(data []interface{}) (int, Expression, Expression, error) {
 	varId, ok := data[1].(float64)
 	if !ok {
-		return nil, errors.New("invalid anyin expression variable format")
+		return 0, nil, nil, errors.New("invalid anyin expression variable format")
 	}
 
 	lhsData, ok := data[2].([]interface{})
 	if !ok {
-		return nil, errors.New("invalid anyin expression lhs format")
+		return 0, nil, nil, errors.New("invalid anyin expression lhs format")
 	}
 
 	subexprData, ok := data[3].([]interface{})
 	if !ok {
-		return nil, errors.New("invalid anyin expression subexpr format")
+		return 0, nil, nil, errors.New("invalid anyin expression subexpr format")
 	}
 
 	lhsExpr, err := parseJsonSubexpr(lhsData)
 	if err != nil {
-		return nil, err
+		return 0, nil, nil, err
 	}
 
 	subexprExpr, err := parseJsonSubexpr(subexprData)
 	if err != nil {
+		return 0, nil, nil, err
+	}
+
+	return int(varId), lhsExpr, subexprExpr, nil
+}
+
+func parseJsonAnyIn(data []interface{}) (Expression, error) {
+	varID, lhsExpr, subexprExpr, err := parseJsonLoop(data)
+	if err != nil {
 		return nil, err
 	}
 
-	return AnyInExpr{int(varId), lhsExpr, subexprExpr}, nil
+	return AnyInExpr{varID, lhsExpr, subexprExpr}, nil
+}
+
+func parseJsonEveryIn(data []interface{}) (Expression, error) {
+	varID, lhsExpr, subexprExpr, err := parseJsonLoop(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return EveryInExpr{varID, lhsExpr, subexprExpr}, nil
+}
+
+func parseJsonAnyEveryIn(data []interface{}) (Expression, error) {
+	varID, lhsExpr, subexprExpr, err := parseJsonLoop(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return AnyEveryInExpr{varID, lhsExpr, subexprExpr}, nil
 }
 
 func parseJsonSubexpr(data []interface{}) (Expression, error) {
@@ -186,6 +213,10 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonAnd(data)
 	case "anyin":
 		return parseJsonAnyIn(data)
+	case "everyin":
+		return parseJsonEveryIn(data)
+	case "anyeveryin":
+		return parseJsonAnyEveryIn(data)
 	case "equals":
 		return parseJsonEquals(data)
 	case "lessthan":
