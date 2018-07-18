@@ -170,11 +170,37 @@ func (val FastVal) AsJsonString() (FastVal, error) {
 	return val, errors.New("invalid type coercion")
 }
 
+func (val FastVal) AsFloat64() (float64, error) {
+	switch val.dataType {
+	case FloatValue:
+		return float64(val.GetFloat()), nil
+	case IntValue:
+		return float64(val.GetInt()), nil
+	case UintValue:
+		return float64(val.GetUint()), nil
+	}
+
+	return 0, errors.New("invalid type coercion")
+}
+
 func (val FastVal) compareStrings(other FastVal) int {
 	// TODO: Improve string comparisons to avoid casting or converting
 	escVal, _ := val.AsJsonString()
 	escOval, _ := other.AsJsonString()
 	return strings.Compare(string(escVal.sliceData), string(escOval.sliceData))
+}
+
+func (val FastVal) compareNumeric(other FastVal) int {
+	// TODO: Just to get a comparison working
+	leftVal, _ := val.AsFloat64()
+	rightVal, _ := other.AsFloat64()
+	if leftVal < rightVal {
+		return -1
+	} else if leftVal > rightVal {
+		return 1
+	} else {
+		return 0
+	}
 }
 
 func (val FastVal) Compare(other FastVal) int {
@@ -196,6 +222,13 @@ func (val FastVal) Compare(other FastVal) int {
 				return 1
 			}
 		}
+		// Note these are just temporary workaround to get numeric comparison working
+	case IntValue:
+		fallthrough
+	case UintValue:
+		fallthrough
+	case FloatValue:
+		return val.compareNumeric(other)
 	}
 
 	if val.dataType < other.dataType {

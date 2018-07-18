@@ -48,16 +48,15 @@ func (expr mergeExpr) RootRefs() []FieldExpr {
 }
 
 type Transformer struct {
-	VarIdx              VariableID
-	BucketIdx           BucketID
-	RootExec            *ExecNode
-	RootTree            binTree
-	NodeMap             map[int]*ExecNode
-	ActiveExec          *ExecNode
-	ActiveBucketIdx     BucketID
-	PrevActiveBucketIdx BucketID
-	MaxDepth            int
-	CurDepth            int
+	VarIdx          VariableID
+	BucketIdx       BucketID
+	RootExec        *ExecNode
+	RootTree        binTree
+	NodeMap         map[int]*ExecNode
+	ActiveExec      *ExecNode
+	ActiveBucketIdx BucketID
+	MaxDepth        int
+	CurDepth        int
 }
 
 type OpType int
@@ -80,6 +79,7 @@ func opTypeToString(value OpType) string {
 	case OpTypeIn:
 		return "in"
 	}
+
 	return "??unknown??"
 }
 

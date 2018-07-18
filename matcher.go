@@ -106,11 +106,11 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 	endPos := -1
 
 	if isLiteralToken(token) {
-		//	fmt.Printf("NEIL DEBUG isLiteral token type: %v tokenData: %s\n", token, string(tokenData[:]))
+		//		fmt.Printf("NEIL DEBUG isLiteral token type: %v tokenData: %s\n", token, string(tokenData[:]))
 		var litParse fastLitParser
 		litVal := litParse.Parse(token, tokenData)
 
-		//	fmt.Printf("LITERAL: `%v` %d %v\n", litVal, token, tokenData)
+		//		fmt.Printf("LITERAL: `%v` %d %v\n", litVal, token, tokenData)
 		for _, op := range node.Ops {
 			//			log.Printf("CHECK: %s %v", op.Op, op.Params)
 			//			fmt.Printf("CHECK: %s\n", op.String())
@@ -132,20 +132,20 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 
 				if op.Op == OpTypeEquals {
 					opRes := litVal.Equals(opVal)
-					if op.OpNot {
-						opRes = !opRes
-					}
-					//	fmt.Printf("NEIL DEBUG fix equal type: %v RHS type %v\n", litVal.Type(), opVal.Type())
-					//  fmt.Printf("NEIL DEBUG Marking bucket %v op: %v rhs: %v OpRes: %v\n",
-					//	  op.BucketIdx, opVal, op.Rhs, opRes)
+					//					fmt.Printf("NEIL DEBUG fix equal type: %v RHS type %v\n", litVal.Type(), opVal.Type())
+					//					fmt.Printf("NEIL DEBUG Marking bucket %v op: %v rhs: %v OpRes: %v\n",
+					//						op.BucketIdx, opVal, op.Rhs, opRes)
 					m.buckets.MarkNode(int(op.BucketIdx), opRes)
 				} else if op.Op == OpTypeLessThan {
 					opRes := litVal.Compare(opVal) < 0
-					if op.OpNot {
-						opRes = !opRes
-					}
-					// fmt.Printf("NEIL DEBUG Marking bucket %v op: %v rhs: %v OpRes: %v\n",
-					//	op.BucketIdx, opVal, op.Rhs, opRes)
+					//					fmt.Printf("NEIL DEBUG Marking bucket %v op: %v rhs: %v OpRes: %v\n",
+					//						op.BucketIdx, opVal, op.Rhs, opRes)
+					m.buckets.MarkNode(int(op.BucketIdx), opRes)
+				} else if op.Op == OpTypeGreaterThan {
+					opRes := litVal.Compare(opVal) > 0
+					//					fmt.Printf("NEIL DEBUG opVal: %v litVal: %v litValDataType: %v\n", opVal, litVal, litVal.dataType)
+					//					fmt.Printf("NEIL DEBUG Marking bucket %v op: %v rhs: %v OpRes: %v\n",
+					//						op.BucketIdx, opVal, op.Rhs, opRes)
 					m.buckets.MarkNode(int(op.BucketIdx), opRes)
 				}
 			}
