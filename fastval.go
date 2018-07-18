@@ -5,6 +5,7 @@ package gojsonsm
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -139,6 +140,85 @@ func (val FastVal) GetFloat() float64 {
 	return *(*float64)(unsafe.Pointer(&val.rawData))
 }
 
+func (val FastVal) AsInt() int64 {
+	switch val.dataType {
+	case IntValue:
+		return val.GetInt()
+	case UintValue:
+		return int64(val.GetUint())
+	case FloatValue:
+		return int64(val.GetFloat())
+	case JsonIntValue:
+		parsedVal, _ := strconv.ParseInt(string(val.sliceData), 10, 64)
+		return parsedVal
+	case JsonUintValue:
+		parsedVal, _ := strconv.ParseUint(string(val.sliceData), 10, 64)
+		return int64(parsedVal)
+	case JsonFloatValue:
+		parsedVal, _ := strconv.ParseFloat(string(val.sliceData), 64)
+		return int64(parsedVal)
+	case TrueValue:
+		return 1
+	case FalseValue:
+		return 0
+	}
+	return 0
+}
+
+func (val FastVal) AsUint() uint64 {
+	switch val.dataType {
+	case IntValue:
+		return uint64(val.GetInt())
+	case UintValue:
+		return val.GetUint()
+	case FloatValue:
+		return uint64(val.GetFloat())
+	case JsonIntValue:
+		parsedVal, _ := strconv.ParseInt(string(val.sliceData), 10, 64)
+		return uint64(parsedVal)
+	case JsonUintValue:
+		parsedVal, _ := strconv.ParseUint(string(val.sliceData), 10, 64)
+		return parsedVal
+	case JsonFloatValue:
+		parsedVal, _ := strconv.ParseFloat(string(val.sliceData), 64)
+		return uint64(parsedVal)
+	case TrueValue:
+		return 1
+	case FalseValue:
+		return 0
+	}
+	return 0
+}
+
+func (val FastVal) AsFloat() float64 {
+	switch val.dataType {
+	case IntValue:
+		return float64(val.GetInt())
+	case UintValue:
+		return float64(val.GetUint())
+	case FloatValue:
+		return val.GetFloat()
+	case JsonIntValue:
+		parsedVal, _ := strconv.ParseInt(string(val.sliceData), 10, 64)
+		return float64(parsedVal)
+	case JsonUintValue:
+		parsedVal, _ := strconv.ParseUint(string(val.sliceData), 10, 64)
+		return float64(parsedVal)
+	case JsonFloatValue:
+		parsedVal, _ := strconv.ParseFloat(string(val.sliceData), 64)
+		return parsedVal
+	case TrueValue:
+		return 1.0
+	case FalseValue:
+		return 0.0
+	}
+	return 0.0
+}
+
+func (val FastVal) AsBoolean() bool {
+	return val.AsInt() != 0
+}
+
 func (val FastVal) AsBinString() (FastVal, error) {
 	switch val.dataType {
 	case StringValue:
@@ -170,17 +250,57 @@ func (val FastVal) AsJsonString() (FastVal, error) {
 	return val, errors.New("invalid type coercion")
 }
 
-func (val FastVal) AsFloat64() (float64, error) {
-	switch val.dataType {
-	case FloatValue:
-		return float64(val.GetFloat()), nil
-	case IntValue:
-		return float64(val.GetInt()), nil
-	case UintValue:
-		return float64(val.GetUint()), nil
+func (val FastVal) compareInt(other FastVal) int {
+	intVal := val.AsInt()
+	intOval := other.AsInt()
+	if intVal < intOval {
+		return -1
+	} else if intVal > intOval {
+		return 1
+	} else {
+		return 0
+	}
+}
+
+func (val FastVal) compareUint(other FastVal) int {
+	uintVal := val.AsUint()
+	uintOval := other.AsUint()
+	if uintVal < uintOval {
+		return -1
+	} else if uintVal > uintOval {
+		return 1
+	} else {
+		return 0
+	}
+}
+
+func (val FastVal) compareFloat(other FastVal) int {
+	// TODO(brett19): EPISLON probably should be defined better than this
+	// possibly even 0 if we want to force exact matching for floats...
+	EPSILON := 0.0000001
+
+	floatVal := val.AsFloat()
+	floatOval := other.AsFloat()
+
+	// Perform epsilon comparison first
+	if math.Abs(floatVal-floatOval) < EPSILON {
+		return 0
 	}
 
-	return 0, errors.New("invalid type coercion")
+	// Traditional comparison
+	if floatVal < floatOval {
+		return -1
+	} else if floatVal > floatOval {
+		return 1
+	} else {
+		return 0
+	}
+}
+
+func (val FastVal) compareBoolean(other FastVal) int {
+	// We cheat here and use int comparison mode, since integer conversions
+	// of the boolean datatypes are consistent
+	return val.compareInt(other)
 }
 
 func (val FastVal) compareStrings(other FastVal) int {
@@ -190,21 +310,20 @@ func (val FastVal) compareStrings(other FastVal) int {
 	return strings.Compare(string(escVal.sliceData), string(escOval.sliceData))
 }
 
-func (val FastVal) compareNumeric(other FastVal) int {
-	// TODO: Just to get a comparison working
-	leftVal, _ := val.AsFloat64()
-	rightVal, _ := other.AsFloat64()
-	if leftVal < rightVal {
-		return -1
-	} else if leftVal > rightVal {
-		return 1
-	} else {
-		return 0
-	}
-}
-
 func (val FastVal) Compare(other FastVal) int {
 	switch val.dataType {
+	case IntValue:
+		return val.compareInt(other)
+	case UintValue:
+		return val.compareUint(other)
+	case FloatValue:
+		return val.compareFloat(other)
+	case JsonIntValue:
+		return val.compareInt(other)
+	case JsonUintValue:
+		return val.compareUint(other)
+	case JsonFloatValue:
+		return val.compareFloat(other)
 	case StringValue:
 		return val.compareStrings(other)
 	case BinStringValue:
@@ -212,23 +331,9 @@ func (val FastVal) Compare(other FastVal) int {
 	case JsonStringValue:
 		return val.compareStrings(other)
 	case TrueValue:
-		switch other.Type() {
-		// Json parser right now parses it as a json string value
-		case JsonStringValue:
-			// TODO - fix jsonscanner so it will be a TrueValue too
-			if other.String() == "\"true\"" {
-				return 0
-			} else {
-				return 1
-			}
-		}
-		// Note these are just temporary workaround to get numeric comparison working
-	case IntValue:
-		fallthrough
-	case UintValue:
-		fallthrough
-	case FloatValue:
-		return val.compareNumeric(other)
+		return val.compareBoolean(other)
+	case FalseValue:
+		return val.compareBoolean(other)
 	}
 
 	if val.dataType < other.dataType {
