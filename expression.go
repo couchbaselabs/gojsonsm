@@ -62,7 +62,7 @@ type FalseExpr struct {
 }
 
 func (expr FalseExpr) String() string {
-	return "True"
+	return "False"
 }
 
 func (expr FalseExpr) RootRefs() []FieldExpr {
