@@ -1,7 +1,6 @@
 package gojsonsm
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -13,7 +12,6 @@ func generateRandomData(mbsToGenerate int) ([][]byte, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	fmt.Printf("MBs To Generate: %v TotalBytes: %v TotalEntries: %v\n", mbsToGenerate, totalBytes, len(data))
 	return data, totalBytes, nil
 }
 
