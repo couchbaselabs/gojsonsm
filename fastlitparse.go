@@ -61,7 +61,7 @@ func (p *fastLitParser) Parse(token TokenType, bytes []byte) FastVal {
 	case tknString:
 		return NewBinStringFastVal(p.ParseString(bytes))
 	case tknEscString:
-		return NewBinaryFastVal(p.ParseEscString(bytes))
+		return NewBinStringFastVal(p.ParseEscString(bytes))
 	case tknInteger:
 		return NewIntFastVal(p.ParseInt(bytes))
 	case tknNumber:
