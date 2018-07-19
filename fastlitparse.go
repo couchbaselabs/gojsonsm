@@ -56,7 +56,7 @@ func (p *fastLitParser) ParseEscString(bytes []byte) []byte {
 	return bytesOut
 }
 
-func (p *fastLitParser) Parse(token TokenType, bytes []byte) FastVal {
+func (p *fastLitParser) Parse(token tokenType, bytes []byte) FastVal {
 	switch token {
 	case tknString:
 		return NewBinStringFastVal(p.ParseString(bytes))

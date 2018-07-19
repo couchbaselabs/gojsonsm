@@ -34,39 +34,35 @@ func (m *Matcher) Reset() {
 func (m *Matcher) leaveValue() error {
 	depth := 0
 
-	data := m.tokens.data
-	pos := m.tokens.pos
-	scanner := &m.tokens.scanner
+	tokens := &m.tokens
 	for {
-		state := scanner.step(scanner, data[pos])
-		pos++
+		token, _, err := tokens.Step()
+		if err != nil {
+			return err
+		}
 
-		switch state {
-		case scanBeginObject:
+		switch token {
+		case tknObjectStart:
 			depth++
-		case scanEndObject:
+		case tknObjectEnd:
 			if depth == 0 {
-				m.tokens.pos = pos
 				return nil
 			}
 			depth--
-		case scanBeginArray:
+		case tknArrayStart:
 			depth++
-		case scanEndArray:
+		case tknArrayEnd:
 			if depth == 0 {
-				m.tokens.pos = pos
 				return nil
 			}
 			depth--
-		case scanError:
-			return scanner.err
-		case scanEnd:
+		case tknEnd:
 			panic("unexpected EOF")
 		}
 	}
 }
 
-func (m *Matcher) skipValue(token TokenType) error {
+func (m *Matcher) skipValue(token tokenType) error {
 	switch token {
 	case tknString:
 		return nil
@@ -101,7 +97,7 @@ func (m *Matcher) resolveParam(in interface{}) FastVal {
 	}
 }
 
-func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) error {
+func (m *Matcher) matchExec(token tokenType, tokenData []byte, node *ExecNode) error {
 	startPos := m.tokens.pos
 	endPos := -1
 
@@ -153,8 +149,24 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 	} else if token == tknObjectStart {
 		var keyLitParse fastLitParser
 
-		for {
-			token, tokenData, err := m.tokens.step()
+		for i := 0; ; i++ {
+			// If this is not the first entry in the object, there should be a
+			// list delimiter ('c') that shows up in the input first.
+			if i != 0 {
+				token, _, err := m.tokens.Step()
+				if err != nil {
+					return err
+				}
+
+				if token == tknObjectEnd {
+					return nil
+				}
+				if token != tknListDelim {
+					panic("expected object field element delimiter")
+				}
+			}
+
+			token, tokenData, err := m.tokens.Step()
 			if err != nil {
 				return err
 			}
@@ -171,7 +183,15 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 				panic("expected literal")
 			}
 
-			token, tokenData, err = m.tokens.step()
+			token, _, err = m.tokens.Step()
+			if err != nil {
+				return err
+			}
+			if token != tknObjectKeyDelim {
+				panic("expected object key delimiter")
+			}
+
+			token, tokenData, err = m.tokens.Step()
 			if err != nil {
 				return err
 			}
@@ -197,21 +217,17 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 			// If we have no loop handlers, we can just skip the whole thing...
 			m.skipValue(token)
 		} else {
-			// TODO(brett19): We need to improve this.  The scanner/tokenizer actually
-			// has a bunch of behind-the-scenes state that we need to be cautious of.  In
-			// this case, because we always stop at the edge of a value, process that
-			// value and then return to the begining, the internal stacks are identical
-			// and we don't need to worry about it.  This is extremely dangerous and very
-			// prone to being broken in the future though.  State saving needs to be more
-			// inclusive, or the tokenizer needs to be modified to not need internal state.
-			savePos := m.tokens.pos
+			// Lets save where the beginning of the array is so that for each
+			// loop entry, we can easily revert back to the beginning of the
+			// array to process the elements.
+			savePos := m.tokens.Position()
 
 			for loopIdx, loop := range node.Loops {
 				if loopIdx != 0 {
 					// If this is not the first loop, we will need to reset back to the
 					// begining of the array the loops are scanning.  In the future, perhaps
 					// we can add support for parallel ExecNode handling and do it in one pass.
-					m.tokens.seek(savePos)
+					m.tokens.Seek(savePos)
 				}
 
 				// We need to keep track of the overall loop result value while the bin tree
@@ -236,11 +252,26 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 
 				// Scan through all the values in the loop
 				for i := 0; ; i++ {
-					token, tokenData, err := m.tokens.step()
+					// If this is not the first entry in the array, there should be a
+					// list delimiter ('c') that shows up in the input first.
+					if i != 0 {
+						token, _, err := m.tokens.Step()
+						if err != nil {
+							return err
+						}
+
+						if token == tknArrayEnd {
+							break
+						}
+						if token != tknListDelim {
+							panic("expected array element delimiter")
+						}
+					}
+
+					token, tokenData, err := m.tokens.Step()
 					if err != nil {
 						return err
 					}
-
 					if token == tknArrayEnd {
 						break
 					}
@@ -328,10 +359,9 @@ func (m *Matcher) matchExec(token TokenType, tokenData []byte, node *ExecNode) e
 }
 
 func (m *Matcher) Match(data []byte) (bool, error) {
+	m.tokens.Reset(data)
 
-	m.tokens.start(data)
-
-	token, tokenData, err := m.tokens.step()
+	token, tokenData, err := m.tokens.Step()
 	if err != nil {
 		return false, err
 	}
