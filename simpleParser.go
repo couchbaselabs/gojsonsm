@@ -713,22 +713,28 @@ func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expr
 	switch nodeData {
 	case TokenOperatorEqual:
 		return ctx.outputEq(node, pos)
+	case TokenOperatorNotEqual:
+		return ctx.outputNotEq(node, pos)
 	case TokenOperatorOr:
 		return ctx.outputOr(node, pos)
 	case TokenOperatorAnd:
 		return ctx.outputAnd(node, pos)
-	case TokenOperatorGreaterThanEq:
-		return ctx.outputGreaterEquals(node, pos)
 	case TokenOperatorLessThan:
 		return ctx.outputLessThan(node, pos)
+	case TokenOperatorGreaterThan:
+		return ctx.outputGreaterThan(node, pos)
+	case TokenOperatorGreaterThanEq:
+		return ctx.outputGreaterEq(node, pos)
+	case TokenOperatorLessThanEq:
+		return ctx.outputLessThanEq(node, pos)
 	default:
 		return emptyExpression, fmt.Errorf("Error: Invalid op type: %s", nodeData)
 	}
 }
 
 // Various outputOp types methods
-func (ctx *expressionParserContext) outputGreaterEquals(node ParserTreeNode, pos int) (Expression, error) {
-	var out GreaterEqualExpr
+func (ctx *expressionParserContext) outputGreaterThan(node ParserTreeNode, pos int) (Expression, error) {
+	var out GreaterThanExpr
 	leftNode, leftPos := ctx.getLeftOutputNode(pos)
 	rightNode, rightPos := ctx.getRightOutputNode(pos)
 
@@ -744,6 +750,20 @@ func (ctx *expressionParserContext) outputGreaterEquals(node ParserTreeNode, pos
 
 	out.Lhs = leftSubExpr
 	out.Rhs = rightSubExpr
+
+	return out, nil
+}
+
+func (ctx *expressionParserContext) outputGreaterEq(node ParserTreeNode, pos int) (Expression, error) {
+	var out NotExpr
+
+	// >= is the inverse of <
+	subLessThanExpr, err := ctx.outputLessThan(node, pos)
+	if err != nil {
+		return out, err
+	}
+
+	out.SubExpr = subLessThanExpr
 
 	return out, nil
 }
@@ -769,6 +789,20 @@ func (ctx *expressionParserContext) outputLessThan(node ParserTreeNode, pos int)
 	return out, nil
 }
 
+func (ctx *expressionParserContext) outputLessThanEq(node ParserTreeNode, pos int) (Expression, error) {
+	var out NotExpr
+
+	// <= is the inverse of >
+	subGreaterThan, err := ctx.outputGreaterThan(node, pos)
+	if err != nil {
+		return out, err
+	}
+
+	out.SubExpr = subGreaterThan
+
+	return out, nil
+}
+
 func (ctx *expressionParserContext) outputEq(node ParserTreeNode, pos int) (Expression, error) {
 	var out EqualsExpr
 	leftNode, leftPos := ctx.getLeftOutputNode(pos)
@@ -786,6 +820,19 @@ func (ctx *expressionParserContext) outputEq(node ParserTreeNode, pos int) (Expr
 
 	out.Lhs = leftSubExpr
 	out.Rhs = rightSubExpr
+
+	return out, nil
+}
+
+func (ctx *expressionParserContext) outputNotEq(node ParserTreeNode, pos int) (Expression, error) {
+	var out NotExpr
+
+	subEqualExpr, err := ctx.outputEq(node, pos)
+	if err != nil {
+		return out, err
+	}
+
+	out.SubExpr = subEqualExpr
 
 	return out, nil
 }

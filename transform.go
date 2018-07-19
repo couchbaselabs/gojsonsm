@@ -64,7 +64,7 @@ type OpType int
 const (
 	OpTypeEquals OpType = iota
 	OpTypeLessThan
-	OpTypeGreaterEquals
+	OpTypeGreaterThan
 	OpTypeIn
 )
 
@@ -74,8 +74,8 @@ func opTypeToString(value OpType) string {
 		return "eq"
 	case OpTypeLessThan:
 		return "lt"
-	case OpTypeGreaterEquals:
-		return "gte"
+	case OpTypeGreaterThan:
+		return "gt"
 	case OpTypeIn:
 		return "in"
 	}
@@ -86,12 +86,17 @@ func opTypeToString(value OpType) string {
 type OpNode struct {
 	BucketIdx BucketID
 	Op        OpType
+	OpNot     bool
 	Rhs       interface{}
 }
 
 func (op OpNode) String() string {
 	var out string
-	out += fmt.Sprintf("[%d] %s", op.BucketIdx, opTypeToString(op.Op))
+	var opNotStr string
+	if op.OpNot {
+		opNotStr = "not "
+	}
+	out += fmt.Sprintf("[%d] %s%s", op.BucketIdx, opNotStr, opTypeToString(op.Op))
 
 	if op.Rhs != nil {
 		out += " " + fmt.Sprintf("%v", op.Rhs)
@@ -290,7 +295,7 @@ func (t *Transformer) transformMergePiece(expr mergeExpr, i int) *ExecNode {
 	}
 
 	baseBucketIdx := t.ActiveBucketIdx
-	t.RootTree.data[baseBucketIdx].NodeType = nodeTypeOr
+	t.RootTree.data[baseBucketIdx].NodeType = nodeTypeNeor
 
 	t.newBucket()
 	expr.bucketIDs[i] = t.ActiveBucketIdx
@@ -431,6 +436,15 @@ func (t *Transformer) makeRhsParam(expr Expression) interface{} {
 	}
 }
 
+func (t *Transformer) previousNotNode() bool {
+	parentIdx := t.RootTree.data[t.ActiveBucketIdx].ParentIdx
+	if parentIdx >= 0 {
+		potentialNotNode := t.RootTree.data[parentIdx]
+		return potentialNotNode.NodeType == nodeTypeNot
+	}
+	return false
+}
+
 func (t *Transformer) transformEquals(expr EqualsExpr) *ExecNode {
 	if lhsField, ok := expr.Lhs.(FieldExpr); ok {
 		execNode := t.getExecNode(lhsField)
@@ -444,6 +458,7 @@ func (t *Transformer) transformEquals(expr EqualsExpr) *ExecNode {
 		execNode.Ops = append(execNode.Ops, &OpNode{
 			t.ActiveBucketIdx,
 			OpTypeEquals,
+			t.previousNotNode(),
 			t.makeRhsParam(expr.Rhs),
 		})
 	} else {
@@ -466,6 +481,7 @@ func (t *Transformer) transformLessThan(expr LessThanExpr) *ExecNode {
 		execNode.Ops = append(execNode.Ops, &OpNode{
 			t.ActiveBucketIdx,
 			OpTypeLessThan,
+			t.previousNotNode(),
 			t.makeRhsParam(expr.Rhs),
 		})
 	} else {
@@ -475,7 +491,7 @@ func (t *Transformer) transformLessThan(expr LessThanExpr) *ExecNode {
 	return nil
 }
 
-func (t *Transformer) transformGreaterEqual(expr GreaterEqualExpr) *ExecNode {
+func (t *Transformer) transformGreaterThan(expr GreaterThanExpr) *ExecNode {
 	if lhsField, ok := expr.Lhs.(FieldExpr); ok {
 		execNode := t.getExecNode(lhsField)
 
@@ -487,7 +503,8 @@ func (t *Transformer) transformGreaterEqual(expr GreaterEqualExpr) *ExecNode {
 
 		execNode.Ops = append(execNode.Ops, &OpNode{
 			t.ActiveBucketIdx,
-			OpTypeGreaterEquals,
+			OpTypeGreaterThan,
+			t.previousNotNode(),
 			t.makeRhsParam(expr.Rhs),
 		})
 	} else {
@@ -517,8 +534,8 @@ func (t *Transformer) transformOne(expr Expression) *ExecNode {
 		return t.transformEquals(expr)
 	case LessThanExpr:
 		return t.transformLessThan(expr)
-	case GreaterEqualExpr:
-		return t.transformGreaterEqual(expr)
+	case GreaterThanExpr:
+		return t.transformGreaterThan(expr)
 	}
 	return nil
 }
