@@ -4,9 +4,9 @@ package gojsonsm
 
 import (
 	"encoding/json"
-	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // Makes sure that the parsing of subcontext works

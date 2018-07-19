@@ -34,6 +34,14 @@ func binTreeNodeTypeToString(nodeType BinTreeNodeType) string {
 	return "??ERROR??"
 }
 
+func binTreeNodeTypeHasLeft(nodeType BinTreeNodeType) bool {
+	return nodeType != nodeTypeLeaf
+}
+
+func binTreeNodeTypeHasRight(nodeType BinTreeNodeType) bool {
+	return nodeType != nodeTypeLeaf && nodeType != nodeTypeNot
+}
+
 type binTreePointers struct {
 	ParentIdx int
 	Left      int
@@ -243,11 +251,11 @@ func (state *binTreeState) resetNodeRecursive(index int) {
 	state.data[index] = binTreeStateUnknown
 
 	defNode := state.tree.data[index]
-	if defNode.NodeType != nodeTypeLeaf {
+	if binTreeNodeTypeHasLeft(defNode.NodeType) {
 		state.resetNodeRecursive(defNode.Left)
-		if defNode.NodeType != nodeTypeNot {
-			state.resetNodeRecursive(defNode.Right)
-		}
+	}
+	if binTreeNodeTypeHasRight(defNode.NodeType) {
+		state.resetNodeRecursive(defNode.Right)
 	}
 }
 
@@ -257,16 +265,16 @@ func (state *binTreeState) ResetNode(index int) {
 
 func (state *binTreeState) resolveRecursive(index int) {
 	defNode := state.tree.data[index]
-	if defNode.NodeType != nodeTypeLeaf {
+	if binTreeNodeTypeHasLeft(defNode.NodeType) {
 		if state.data[defNode.Left] == binTreeStateUnknown {
 			state.data[defNode.Left] = binTreeStateResolved
 			state.resolveRecursive(defNode.Left)
 		}
-		if defNode.NodeType != nodeTypeNot {
-			if state.data[defNode.Right] == binTreeStateUnknown {
-				state.data[defNode.Right] = binTreeStateResolved
-				state.resolveRecursive(defNode.Right)
-			}
+	}
+	if binTreeNodeTypeHasRight(defNode.NodeType) {
+		if state.data[defNode.Right] == binTreeStateUnknown {
+			state.data[defNode.Right] = binTreeStateResolved
+			state.resolveRecursive(defNode.Right)
 		}
 	}
 }
