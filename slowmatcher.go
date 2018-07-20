@@ -193,7 +193,7 @@ func (m *SlowMatcher) matchLessThanExpr(expr LessThanExpr) (bool, error) {
 	return val < 0, nil
 }
 
-func (m *SlowMatcher) matchGreaterEqualExpr(expr GreaterEqualExpr) (bool, error) {
+func (m *SlowMatcher) matchGreaterEqualsExpr(expr GreaterEqualsExpr) (bool, error) {
 	val, err := m.compareExprs(expr.Lhs, expr.Rhs)
 	if err != nil {
 		return false, err
@@ -214,8 +214,8 @@ func (m *SlowMatcher) matchOne(expr Expression) (bool, error) {
 		return m.matchEqualsExpr(expr)
 	case LessThanExpr:
 		return m.matchLessThanExpr(expr)
-	case GreaterEqualExpr:
-		return m.matchGreaterEqualExpr(expr)
+	case GreaterEqualsExpr:
+		return m.matchGreaterEqualsExpr(expr)
 	}
 
 	panic("unexpected expression")

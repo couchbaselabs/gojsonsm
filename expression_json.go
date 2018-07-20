@@ -100,7 +100,7 @@ func parseJsonGreaterEquals(data []interface{}) (Expression, error) {
 		return nil, err
 	}
 
-	return GreaterEqualExpr{lhs, rhs}, nil
+	return GreaterEqualsExpr{lhs, rhs}, nil
 }
 
 func parseJsonNot(data []interface{}) (Expression, error) {
@@ -241,7 +241,7 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonEquals(data)
 	case "lessthan":
 		return parseJsonLessThan(data)
-	case "greaterequal":
+	case "greaterequals":
 		return parseJsonGreaterEquals(data)
 	}
 
