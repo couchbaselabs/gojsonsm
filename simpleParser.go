@@ -730,7 +730,7 @@ func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expr
 
 // Various outputOp types methods
 func (ctx *expressionParserContext) outputGreaterEquals(node ParserTreeNode, pos int) (Expression, error) {
-	var out GreaterEqualExpr
+	var out GreaterEqualsExpr
 	leftNode, leftPos := ctx.getLeftOutputNode(pos)
 	rightNode, rightPos := ctx.getRightOutputNode(pos)
 
