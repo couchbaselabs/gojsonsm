@@ -9,14 +9,14 @@ import (
 )
 
 type SlowMatcher struct {
-	exprs []Expression
+	exprs       []Expression
 	exprMatches []bool
-	vars map[int]interface{}
+	vars        map[int]interface{}
 }
 
 func NewSlowMatcher(exprs []Expression) *SlowMatcher {
 	return &SlowMatcher{
-		exprs: exprs,
+		exprs:       exprs,
 		exprMatches: make([]bool, len(exprs)),
 	}
 }
