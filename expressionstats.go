@@ -63,7 +63,16 @@ func (stats *ExpressionStats) scanOne(expr Expression, loopDepth int) error {
 	case EqualsExpr:
 		stats.scanOne(expr.Lhs, loopDepth)
 		stats.scanOne(expr.Rhs, loopDepth)
+	case NotEqualsExpr:
+		stats.scanOne(expr.Lhs, loopDepth)
+		stats.scanOne(expr.Rhs, loopDepth)
 	case LessThanExpr:
+		stats.scanOne(expr.Lhs, loopDepth)
+		stats.scanOne(expr.Rhs, loopDepth)
+	case LessEqualsExpr:
+		stats.scanOne(expr.Lhs, loopDepth)
+		stats.scanOne(expr.Rhs, loopDepth)
+	case GreaterThanExpr:
 		stats.scanOne(expr.Lhs, loopDepth)
 		stats.scanOne(expr.Rhs, loopDepth)
 	case GreaterEqualsExpr:

@@ -238,6 +238,22 @@ func (expr EqualsExpr) RootRefs() []FieldExpr {
 	return out
 }
 
+type NotEqualsExpr struct {
+	Lhs Expression
+	Rhs Expression
+}
+
+func (expr NotEqualsExpr) String() string {
+	return fmt.Sprintf("%s != %s", expr.Lhs, expr.Rhs)
+}
+
+func (expr NotEqualsExpr) RootRefs() []FieldExpr {
+	var out []FieldExpr
+	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
+	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
+	return out
+}
+
 type LessThanExpr struct {
 	Lhs Expression
 	Rhs Expression
@@ -248,6 +264,38 @@ func (expr LessThanExpr) String() string {
 }
 
 func (expr LessThanExpr) RootRefs() []FieldExpr {
+	var out []FieldExpr
+	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
+	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
+	return out
+}
+
+type LessEqualsExpr struct {
+	Lhs Expression
+	Rhs Expression
+}
+
+func (expr LessEqualsExpr) String() string {
+	return fmt.Sprintf("%s <= %s", expr.Lhs, expr.Rhs)
+}
+
+func (expr LessEqualsExpr) RootRefs() []FieldExpr {
+	var out []FieldExpr
+	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
+	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
+	return out
+}
+
+type GreaterThanExpr struct {
+	Lhs Expression
+	Rhs Expression
+}
+
+func (expr GreaterThanExpr) String() string {
+	return fmt.Sprintf("%s > %s", expr.Lhs, expr.Rhs)
+}
+
+func (expr GreaterThanExpr) RootRefs() []FieldExpr {
 	var out []FieldExpr
 	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
 	out = rootSetAdd(out, expr.Rhs.RootRefs()...)

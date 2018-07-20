@@ -184,6 +184,15 @@ func (m *SlowMatcher) matchEqualsExpr(expr EqualsExpr) (bool, error) {
 	return val == 0, nil
 }
 
+func (m *SlowMatcher) matchNotEqualsExpr(expr NotEqualsExpr) (bool, error) {
+	val, err := m.compareExprs(expr.Lhs, expr.Rhs)
+	if err != nil {
+		return false, err
+	}
+
+	return val != 0, nil
+}
+
 func (m *SlowMatcher) matchLessThanExpr(expr LessThanExpr) (bool, error) {
 	val, err := m.compareExprs(expr.Lhs, expr.Rhs)
 	if err != nil {
@@ -191,6 +200,24 @@ func (m *SlowMatcher) matchLessThanExpr(expr LessThanExpr) (bool, error) {
 	}
 
 	return val < 0, nil
+}
+
+func (m *SlowMatcher) matchLessEqualsExpr(expr LessEqualsExpr) (bool, error) {
+	val, err := m.compareExprs(expr.Lhs, expr.Rhs)
+	if err != nil {
+		return false, err
+	}
+
+	return val <= 0, nil
+}
+
+func (m *SlowMatcher) matchGreaterThanExpr(expr GreaterThanExpr) (bool, error) {
+	val, err := m.compareExprs(expr.Lhs, expr.Rhs)
+	if err != nil {
+		return false, err
+	}
+
+	return val > 0, nil
 }
 
 func (m *SlowMatcher) matchGreaterEqualsExpr(expr GreaterEqualsExpr) (bool, error) {
@@ -212,8 +239,14 @@ func (m *SlowMatcher) matchOne(expr Expression) (bool, error) {
 		return m.matchAnyInExpr(expr)
 	case EqualsExpr:
 		return m.matchEqualsExpr(expr)
+	case NotEqualsExpr:
+		return m.matchNotEqualsExpr(expr)
 	case LessThanExpr:
 		return m.matchLessThanExpr(expr)
+	case LessEqualsExpr:
+		return m.matchLessEqualsExpr(expr)
+	case GreaterThanExpr:
+		return m.matchGreaterThanExpr(expr)
 	case GreaterEqualsExpr:
 		return m.matchGreaterEqualsExpr(expr)
 	}
