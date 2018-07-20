@@ -241,7 +241,6 @@ func TestSimpleParserSubContext6(t *testing.T) {
 	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
 	assert.NotNil(node)
 
-	//	fmt.Printf("DEBUG tree: %v\n", ctx.parserTree.data)
 	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
 	assert.Equal(0, ctx.parserTree.data[1].Left)
 	assert.Equal(2, ctx.parserTree.data[1].Right)
@@ -546,7 +545,6 @@ func TestParserExpressionOutputNot(t *testing.T) {
 	assert.NotNil(matchDef)
 
 	m := NewMatcher(matchDef)
-	//	fmt.Printf("NEIL DEBUG matchDef tree: %v\n", matchDef.MatchTree.data)
 
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
@@ -625,12 +623,10 @@ func TestParserExpressionOutputNot3(t *testing.T) {
 	      ["field", "age"],
 	      ["value", 50]
 	    ],
-	    ["not",
-	      ["equals",
-	        ["field", "isActive"],
-	        ["value", true]
-	      ]
-	    ]
+		["notequals",
+		  ["field", "isActive"],
+		  ["value", true]
+		]
 	  ]
     ]`)
 
@@ -658,6 +654,238 @@ func TestParserExpressionOutputNot3(t *testing.T) {
 	assert.True(match)
 
 	strExpr := "name.first == 'David' || (age < 50 && isActive != true)"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+}
+
+func TestParserExpressionOutputGreaterThan(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	["or",
+	  ["equals",
+	    ["field", "name", "first"],
+	    ["value", "David"]
+	  ],
+	  ["and",
+	    ["greaterthan",
+	      ["field", "age"],
+	      ["value", 50]
+	    ],
+	    ["equals",
+	      ["field", "isActive"],
+	      ["value", true]
+	    ]
+	  ]
+    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{jsonExpr})
+	assert.NotNil(matchDef)
+
+	m := NewMatcher(matchDef)
+
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Goliath",
+		},
+		"isActive": true,
+		"age":      51,
+	}
+	udMarsh, err := json.Marshal(userData)
+	if err != nil {
+	}
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+
+	strExpr := "name.first == 'David' || (age > 50 && isActive == true)"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+}
+
+func TestParserExpressionOutputGreaterThanEquals(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	["or",
+	  ["equals",
+	    ["field", "name", "first"],
+	    ["value", "David"]
+	  ],
+	  ["and",
+	    ["greaterequals",
+	      ["field", "age"],
+	      ["value", 50]
+	    ],
+	    ["equals",
+	      ["field", "isActive"],
+	      ["value", true]
+	    ]
+	  ]
+    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{jsonExpr})
+	assert.NotNil(matchDef)
+
+	m := NewMatcher(matchDef)
+
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Goliath",
+		},
+		"isActive": true,
+		"age":      50,
+	}
+	udMarsh, err := json.Marshal(userData)
+	if err != nil {
+	}
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+
+	strExpr := "name.first == 'David' || (age >= 50 && isActive == true)"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+}
+
+func TestParserExpressionOutputLessThan(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	["or",
+	  ["equals",
+	    ["field", "name", "first"],
+	    ["value", "David"]
+	  ],
+	  ["and",
+	    ["lessthan",
+	      ["field", "age"],
+	      ["value", 50]
+	    ],
+	    ["equals",
+	      ["field", "isActive"],
+	      ["value", true]
+	    ]
+	  ]
+    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{jsonExpr})
+	assert.NotNil(matchDef)
+
+	m := NewMatcher(matchDef)
+
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Goliath",
+		},
+		"isActive": true,
+		"age":      49,
+	}
+	udMarsh, err := json.Marshal(userData)
+	if err != nil {
+	}
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+
+	strExpr := "name.first == 'David' || (age < 50 && isActive == true)"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+}
+
+func TestParserExpressionOutputLessThanEq(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	["or",
+	  ["equals",
+	    ["field", "name", "first"],
+	    ["value", "David"]
+	  ],
+	  ["and",
+	    ["lessequals",
+	      ["field", "age"],
+	      ["value", 50]
+	    ],
+	    ["equals",
+	      ["field", "isActive"],
+	      ["value", true]
+	    ]
+	  ]
+    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{jsonExpr})
+	assert.NotNil(matchDef)
+
+	m := NewMatcher(matchDef)
+
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Goliath",
+		},
+		"isActive": true,
+		"age":      50,
+	}
+	udMarsh, err := json.Marshal(userData)
+	if err != nil {
+	}
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+
+	strExpr := "name.first == 'David' || (age <= 50 && isActive == true)"
 
 	ctx, err := NewExpressionParserCtx(strExpr)
 	assert.Nil(err)
@@ -832,4 +1060,19 @@ func TestParserExpressionOutputNeg(t *testing.T) {
 
 	_, err = ctx.outputExpression()
 	assert.NotNil(err)
+}
+
+func TestParserExpressionWithGreaterThan(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "age > 50"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	_, err = ctx.outputExpression()
+	assert.Nil(err)
 }
