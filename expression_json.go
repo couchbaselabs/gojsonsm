@@ -31,23 +31,32 @@ func parseJsonField(data []interface{}) (Expression, error) {
 	return out, nil
 }
 
-func parseJsonEquals(data []interface{}) (Expression, error) {
+func parseJsonComparison(data []interface{}) (Expression, Expression, error) {
 	lhsData, ok := data[1].([]interface{})
 	if !ok {
-		return nil, errors.New("invalid equals expression lhs format")
+		return nil, nil, errors.New("invalid comparison expression lhs format")
 	}
 
 	rhsData, ok := data[2].([]interface{})
 	if !ok {
-		return nil, errors.New("invalid equals expression rhs format")
+		return nil, nil, errors.New("invalid comparison expression rhs format")
 	}
 
 	lhs, err := parseJsonSubexpr(lhsData)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	rhs, err := parseJsonSubexpr(rhsData)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return lhs, rhs, nil
+}
+
+func parseJsonEquals(data []interface{}) (Expression, error) {
+	lhs, rhs, err := parseJsonComparison(data)
 	if err != nil {
 		return nil, err
 	}
@@ -55,23 +64,17 @@ func parseJsonEquals(data []interface{}) (Expression, error) {
 	return EqualsExpr{lhs, rhs}, nil
 }
 
-func parseJsonLessThan(data []interface{}) (Expression, error) {
-	lhsData, ok := data[1].([]interface{})
-	if !ok {
-		return nil, errors.New("invalid lessthan expression lhs format")
-	}
-
-	rhsData, ok := data[2].([]interface{})
-	if !ok {
-		return nil, errors.New("invalid lessthan expression rhs format")
-	}
-
-	lhs, err := parseJsonSubexpr(lhsData)
+func parseJsonNotEquals(data []interface{}) (Expression, error) {
+	lhs, rhs, err := parseJsonComparison(data)
 	if err != nil {
 		return nil, err
 	}
 
-	rhs, err := parseJsonSubexpr(rhsData)
+	return NotEqualsExpr{lhs, rhs}, nil
+}
+
+func parseJsonLessThan(data []interface{}) (Expression, error) {
+	lhs, rhs, err := parseJsonComparison(data)
 	if err != nil {
 		return nil, err
 	}
@@ -79,23 +82,26 @@ func parseJsonLessThan(data []interface{}) (Expression, error) {
 	return LessThanExpr{lhs, rhs}, nil
 }
 
-func parseJsonGreaterEquals(data []interface{}) (Expression, error) {
-	lhsData, ok := data[1].([]interface{})
-	if !ok {
-		return nil, errors.New("invalid greaterequals expression lhs format")
-	}
-
-	rhsData, ok := data[2].([]interface{})
-	if !ok {
-		return nil, errors.New("invalid greaterequals expression rhs format")
-	}
-
-	lhs, err := parseJsonSubexpr(lhsData)
+func parseJsonLessEquals(data []interface{}) (Expression, error) {
+	lhs, rhs, err := parseJsonComparison(data)
 	if err != nil {
 		return nil, err
 	}
 
-	rhs, err := parseJsonSubexpr(rhsData)
+	return LessEqualsExpr{lhs, rhs}, nil
+}
+
+func parseJsonGreaterThan(data []interface{}) (Expression, error) {
+	lhs, rhs, err := parseJsonComparison(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return GreaterThanExpr{lhs, rhs}, nil
+}
+
+func parseJsonGreaterEquals(data []interface{}) (Expression, error) {
+	lhs, rhs, err := parseJsonComparison(data)
 	if err != nil {
 		return nil, err
 	}
@@ -239,8 +245,14 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonAnyEveryIn(data)
 	case "equals":
 		return parseJsonEquals(data)
+	case "notequals":
+		return parseJsonNotEquals(data)
 	case "lessthan":
 		return parseJsonLessThan(data)
+	case "lessequals":
+		return parseJsonLessEquals(data)
+	case "greaterthan":
+		return parseJsonGreaterThan(data)
 	case "greaterequals":
 		return parseJsonGreaterEquals(data)
 	}

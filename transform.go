@@ -63,7 +63,10 @@ type OpType int
 
 const (
 	OpTypeEquals OpType = iota
+	OpTypeNotEquals
 	OpTypeLessThan
+	OpTypeLessEquals
+	OpTypeGreaterThan
 	OpTypeGreaterEquals
 	OpTypeIn
 )
@@ -72,8 +75,14 @@ func opTypeToString(value OpType) string {
 	switch value {
 	case OpTypeEquals:
 		return "eq"
+	case OpTypeNotEquals:
+		return "neq"
 	case OpTypeLessThan:
 		return "lt"
+	case OpTypeLessEquals:
+		return "le"
+	case OpTypeGreaterThan:
+		return "gt"
 	case OpTypeGreaterEquals:
 		return "gte"
 	case OpTypeIn:
@@ -431,11 +440,11 @@ func (t *Transformer) makeRhsParam(expr Expression) interface{} {
 	}
 }
 
-func (t *Transformer) transformEquals(expr EqualsExpr) *ExecNode {
-	if lhsField, ok := expr.Lhs.(FieldExpr); ok {
+func (t *Transformer) transformComparison(op OpType, lhs, rhs Expression) *ExecNode {
+	if lhsField, ok := lhs.(FieldExpr); ok {
 		execNode := t.getExecNode(lhsField)
 
-		lhsRootRefs := expr.Rhs.RootRefs()
+		lhsRootRefs := rhs.RootRefs()
 		if len(lhsRootRefs) > 0 {
 			storeId := execNode.makeStored(t)
 			execNode = t.ActiveExec.makeAfterNode(storeId)
@@ -443,58 +452,38 @@ func (t *Transformer) transformEquals(expr EqualsExpr) *ExecNode {
 
 		execNode.Ops = append(execNode.Ops, &OpNode{
 			t.ActiveBucketIdx,
-			OpTypeEquals,
-			t.makeRhsParam(expr.Rhs),
+			op,
+			t.makeRhsParam(rhs),
 		})
 	} else {
-		panic("LHS of EqualsExpr must be a FieldExpr")
+		panic("LHS of a comparison expression must be a FieldExpr")
 	}
 
 	return nil
+}
+
+func (t *Transformer) transformEquals(expr EqualsExpr) *ExecNode {
+	return t.transformComparison(OpTypeEquals, expr.Lhs, expr.Rhs)
+}
+
+func (t *Transformer) transformNotEquals(expr NotEqualsExpr) *ExecNode {
+	return t.transformComparison(OpTypeNotEquals, expr.Lhs, expr.Rhs)
 }
 
 func (t *Transformer) transformLessThan(expr LessThanExpr) *ExecNode {
-	if lhsField, ok := expr.Lhs.(FieldExpr); ok {
-		execNode := t.getExecNode(lhsField)
+	return t.transformComparison(OpTypeLessThan, expr.Lhs, expr.Rhs)
+}
 
-		lhsRootRefs := expr.Rhs.RootRefs()
-		if len(lhsRootRefs) > 0 {
-			storeId := execNode.makeStored(t)
-			execNode = t.ActiveExec.makeAfterNode(storeId)
-		}
+func (t *Transformer) transformLessEquals(expr LessEqualsExpr) *ExecNode {
+	return t.transformComparison(OpTypeLessEquals, expr.Lhs, expr.Rhs)
+}
 
-		execNode.Ops = append(execNode.Ops, &OpNode{
-			t.ActiveBucketIdx,
-			OpTypeLessThan,
-			t.makeRhsParam(expr.Rhs),
-		})
-	} else {
-		panic("LHS of EqualsExpr must be a FieldExpr")
-	}
-
-	return nil
+func (t *Transformer) transformGreaterThan(expr GreaterThanExpr) *ExecNode {
+	return t.transformComparison(OpTypeGreaterThan, expr.Lhs, expr.Rhs)
 }
 
 func (t *Transformer) transformGreaterEquals(expr GreaterEqualsExpr) *ExecNode {
-	if lhsField, ok := expr.Lhs.(FieldExpr); ok {
-		execNode := t.getExecNode(lhsField)
-
-		lhsRootRefs := expr.Rhs.RootRefs()
-		if len(lhsRootRefs) > 0 {
-			storeId := execNode.makeStored(t)
-			execNode = t.ActiveExec.makeAfterNode(storeId)
-		}
-
-		execNode.Ops = append(execNode.Ops, &OpNode{
-			t.ActiveBucketIdx,
-			OpTypeGreaterEquals,
-			t.makeRhsParam(expr.Rhs),
-		})
-	} else {
-		panic("LHS of EqualsExpr must be a FieldExpr")
-	}
-
-	return nil
+	return t.transformComparison(OpTypeGreaterEquals, expr.Lhs, expr.Rhs)
 }
 
 func (t *Transformer) transformOne(expr Expression) *ExecNode {
@@ -515,8 +504,14 @@ func (t *Transformer) transformOne(expr Expression) *ExecNode {
 		return t.transformAnd(expr)
 	case EqualsExpr:
 		return t.transformEquals(expr)
+	case NotEqualsExpr:
+		return t.transformNotEquals(expr)
 	case LessThanExpr:
 		return t.transformLessThan(expr)
+	case LessEqualsExpr:
+		return t.transformLessEquals(expr)
+	case GreaterThanExpr:
+		return t.transformGreaterThan(expr)
 	case GreaterEqualsExpr:
 		return t.transformGreaterEquals(expr)
 	}
