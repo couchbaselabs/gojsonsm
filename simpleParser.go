@@ -11,7 +11,7 @@ import (
 /**
  * SimpleParser provides user to be able to specify a C-Styled expression for gojsonsm.
  *
- * Values can be string or floats. Strings should be enclosed by single quotes, as to not be confused
+ * Values can be string or floats. Strings should be enclosed by double quotes, as to not be confused
  * with field variables
  *
  * Parenthesis are allowed, but must be surrounded by at least 1 white space
@@ -19,7 +19,7 @@ import (
  * 		==/=, !=, ||/OR, &&/AND, >=, >, <=, <
  *
  * Usage example:
- * exprStr := "name.first == 'Neil' && (age < 50 || isActive == true)"
+ * exprStr := "name.first == "Neil" && (age < 50 || isActive == true)"
  * expr, err := ParseSimpleExpression(exprStr)
  *
  * Notes:
@@ -36,7 +36,7 @@ var ErrorParenWSpace error = fmt.Errorf("Error: parenthesis must have white spac
 var NonErrorOneLayerDone error = fmt.Errorf("One layer has finished")
 
 // Values by def should be enclosed within single quotes
-var valueRegex *regexp.Regexp = regexp.MustCompile(`^\'.*\'$`)
+var valueRegex *regexp.Regexp = regexp.MustCompile(`^\".*\"$`)
 
 // Or Values can be int or floats by themselves (w/o alpha char)
 var valueNumRegex *regexp.Regexp = regexp.MustCompile(`^(-?)(0|([1-9][0-9]*))(\\.[0-9]+)?$`)
@@ -457,7 +457,7 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 		return token, TokenTypeOperator, nil
 	} else if valueRegex.MatchString(token) {
 		// For value, strip the single quote
-		token = strings.Trim(token, "'")
+		token = strings.Trim(token, "\"")
 		return token, TokenTypeValue, nil
 	} else if valueNumRegex.MatchString(token) {
 		return token, TokenTypeValue, nil
