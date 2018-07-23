@@ -16,7 +16,7 @@ import (
  *
  * Parenthesis are allowed, but must be surrounded by at least 1 white space
  * Currently, only the following operations are supported:
- * 		==, ||, &&, >=, <
+ * 		==/=, !=, ||/OR, &&/AND, >=, >, <=, <
  *
  * Usage example:
  * exprStr := "name.first == 'Neil' && (age < 50 || isActive == true)"
@@ -34,6 +34,12 @@ var ErrorNeedToStartNewCtx error = fmt.Errorf("Error: Need to spawn subcontext")
 var ErrorParenMismatch error = fmt.Errorf("Error: Parenthesis mismatch")
 var ErrorParenWSpace error = fmt.Errorf("Error: parenthesis must have white space before or after it")
 var NonErrorOneLayerDone error = fmt.Errorf("One layer has finished")
+
+// Values by def should be enclosed within single quotes
+var valueRegex *regexp.Regexp = regexp.MustCompile(`^\'.*\'$`)
+
+// Or Values can be int or floats by themselves (w/o alpha char)
+var valueNumRegex *regexp.Regexp = regexp.MustCompile(`^(-?)(0|([1-9][0-9]*))(\\.[0-9]+)?$`)
 
 type ParserTreeNode struct {
 	tokenType ParseTokenType
@@ -59,10 +65,11 @@ func NewParserTreeNode(tokenType ParseTokenType, data interface{}) ParserTreeNod
 type parseMode int
 
 const (
-	fieldMode parseMode = iota
-	opMode    parseMode = iota
-	valueMode parseMode = iota
-	chainMode parseMode = iota
+	invalidMode parseMode = iota
+	fieldMode   parseMode = iota
+	opMode      parseMode = iota
+	valueMode   parseMode = iota
+	chainMode   parseMode = iota
 )
 
 const fieldSeparator = "."
@@ -131,11 +138,19 @@ func NewParserSubContextOneLayer() *parserSubContext {
 	return subCtx
 }
 
+type multiwordHelperPair struct {
+	actualMultiWords []string
+	invalid          bool
+}
+
 type expressionParserContext struct {
 	// For token reading
-	tokens               []string
-	currentTokenIndex    int
-	advTokenPositionOnly bool // This flag is set once, and the corresponding method will toggle it off automatically
+	tokens                     []string
+	currentTokenIndex          int
+	advTokenPositionOnly       bool // This flag is set once, and the corresponding method will toggle it off automatically
+	multiTokenParseMode        parseMode
+	potentialMultiwordOperator [][]string
+	multiwordHelperMap         map[string]*multiwordHelperPair
 
 	// The levels of parenthesis currently discovered in the expression
 	parenDepth int
@@ -213,9 +228,42 @@ const (
 	TokenOperatorGreaterThanEq = ">="
 )
 
+// Other allowable operator tokens
+const (
+	TokenOperatorEqual2 = "="
+	TokenOperatorOr2    = "OR"
+	TokenOperatorAnd2   = "AND"
+)
+
+// Multi-word operator tokens
+var TokenOperatorNotMatch []string = []string{"NOT", "MATCH"}
+var TokenOperatorIsNull []string = []string{"IS", "NULL"}
+var TokenOperatorIsNotNull []string = []string{"IS", "NOT", "NULL"}
+
+// In keeping with internals, flatten it and use it as comparison for actual op when outputting
+func flattenToken(token []string) string {
+	return strings.Join(token, "_")
+}
+
+func replaceOpTokenIfNecessary(token string) string {
+	switch token {
+	case TokenOperatorEqual2:
+		return TokenOperatorEqual
+	case TokenOperatorOr2:
+		return TokenOperatorOr
+	case TokenOperatorAnd2:
+		return TokenOperatorAnd
+	}
+	return token
+}
+
 func tokenIsOpType(token string) bool {
 	// Equal is both numeric and logical
-	return tokenIsChainOpType(token) || token == TokenOperatorEqual || token == TokenOperatorNotEqual || tokenIsCompareOpType(token)
+	return tokenIsChainOpType(token) || tokenIsEquivalentType(token) || tokenIsCompareOpType(token)
+}
+
+func tokenIsEquivalentType(token string) bool {
+	return token == TokenOperatorEqual || token == TokenOperatorEqual2 || token == TokenOperatorNotEqual
 }
 
 // Comparison Operator can be used for both string comparison and numeric
@@ -225,7 +273,7 @@ func tokenIsCompareOpType(token string) bool {
 
 // Chain-op are operators that can chain multiple expressions together
 func tokenIsChainOpType(token string) bool {
-	return token == TokenOperatorAnd || token == TokenOperatorOr
+	return token == TokenOperatorAnd || token == TokenOperatorAnd2 || token == TokenOperatorOr || token == TokenOperatorOr2
 }
 
 func (opCtx opTokenContext) isChainOp() bool {
@@ -323,6 +371,50 @@ func (ctx *expressionParserContext) checkAndMarkDetailedOpToken(token string) {
 	}
 }
 
+func (ctx *expressionParserContext) tokenIsPotentiallyOpType(token string) bool {
+	if token == TokenOperatorNotMatch[0] || token == TokenOperatorIsNull[0] || token == TokenOperatorIsNotNull[0] {
+		ctx.multiwordHelperMap = make(map[string]*multiwordHelperPair)
+		ctx.multiwordHelperMap[flattenToken(TokenOperatorNotMatch)] = &multiwordHelperPair{
+			actualMultiWords: TokenOperatorNotMatch,
+		}
+		ctx.multiwordHelperMap[flattenToken(TokenOperatorIsNull)] = &multiwordHelperPair{
+			actualMultiWords: TokenOperatorIsNull,
+		}
+		ctx.multiwordHelperMap[flattenToken(TokenOperatorIsNotNull)] = &multiwordHelperPair{
+			actualMultiWords: TokenOperatorIsNotNull,
+		}
+		return true
+	}
+	return false
+}
+
+func (ctx *expressionParserContext) handleMultiTokens() (string, ParseTokenType, error) {
+	var tokenOrig string = ctx.tokens[ctx.currentTokenIndex]
+	numValids := len(ctx.multiwordHelperMap)
+
+	for i := 0; ctx.currentTokenIndex+i < len(ctx.tokens); i++ {
+		token := ctx.tokens[ctx.currentTokenIndex+i]
+		for fstr, pair := range ctx.multiwordHelperMap {
+			if pair.invalid {
+				continue
+			}
+			if numValids > 1 {
+				if i >= len(pair.actualMultiWords) || pair.actualMultiWords[i] != token {
+					pair.invalid = true
+					numValids--
+				}
+			} else {
+				if i < len(pair.actualMultiWords) && pair.actualMultiWords[i] == token && i == len(pair.actualMultiWords)-1 {
+					ctx.currentTokenIndex += i
+					return fstr, TokenTypeOperator, nil
+				}
+			}
+		}
+	}
+
+	return tokenOrig, TokenTypeInvalid, fmt.Errorf("Error: Invalid use of keyword for token: %s", tokenOrig)
+}
+
 func (ctx *expressionParserContext) getCurrentTokenParenHelper(token string) (string, ParseTokenType, error) {
 	// For simplicity, let's not allow parenthesis without spaces
 	parenMiddleRegex := regexp.MustCompile(`[A-Za-z]+(\(|\))+[A-Za-z]+`)
@@ -357,12 +449,10 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 	}
 	token := ctx.tokens[ctx.currentTokenIndex]
 
-	// Values by def should be enclosed within single quotes
-	valueRegex := regexp.MustCompile(`^\'.*\'$`)
-	// Or Values can be int or floats by themselves (w/o alpha char)
-	valueNumRegex := regexp.MustCompile(`^(-?)(0|([1-9][0-9]*))(\\.[0-9]+)?$`)
-
-	if tokenIsOpType(token) {
+	if ctx.tokenIsPotentiallyOpType(token) {
+		return ctx.handleMultiTokens()
+	} else if tokenIsOpType(token) {
+		token = replaceOpTokenIfNecessary(token)
 		ctx.checkAndMarkDetailedOpToken(token)
 		return token, TokenTypeOperator, nil
 	} else if valueRegex.MatchString(token) {
@@ -878,6 +968,10 @@ func (ctx *expressionParserContext) outputExpression() (Expression, error) {
 	}
 
 	return ctx.outputOp(node, ctx.treeHeadIndex)
+}
+
+func (ctx *expressionParserContext) inMultiTokenMode() bool {
+	return ctx.multiTokenParseMode != invalidMode
 }
 
 // MAIN

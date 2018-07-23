@@ -4,9 +4,8 @@ package gojsonsm
 
 import (
 	"encoding/json"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 // Makes sure that the parsing of subcontext works
@@ -333,6 +332,49 @@ func TestContextShortCircuit2(t *testing.T) {
 
 	ctx.enableShortCircuitEvalIfPossible()
 	assert.False(ctx.shortCircuitEnabled)
+}
+
+func TestContextParserMultiwordToken(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.first NOT MATCH 'abc'"
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// name.first
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// NOT MATCH
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("NOT_MATCH", token)
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// abc
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
+	assert.Nil(err)
+	assert.Equal("abc", token)
+}
+
+func TestContextParserMultiwordToken2(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.first IS NOT NULL"
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// name.first
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// IS NOT NULL
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("IS_NOT_NULL", token)
+	assert.Nil(err)
 }
 
 func TestContextParserToken(t *testing.T) {
@@ -899,6 +941,29 @@ func TestParserExpressionOutputLessThanEq(t *testing.T) {
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 }
 
+func TestParserAlternativeOperators(t *testing.T) {
+	assert := assert.New(t)
+	strExpr := "name.first == 'David' || (age < 50 && isActive != true)"
+	strExpr2 := "name.first = 'David' OR (age < 50 AND isActive != true)"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+	ctx2, err := NewExpressionParserCtx(strExpr2)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+	err = ctx2.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+	simpleExpr2, err := ctx2.outputExpression()
+	assert.Nil(err)
+
+	assert.Equal(simpleExpr2.String(), simpleExpr.String())
+}
+
 // NEGATIVE test cases
 func TestSimpleParserParenMismatch(t *testing.T) {
 	assert := assert.New(t)
@@ -1075,4 +1140,21 @@ func TestParserExpressionWithGreaterThan(t *testing.T) {
 
 	_, err = ctx.outputExpression()
 	assert.Nil(err)
+}
+
+func TestContextParserNegMultiwordToken(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.first IS NOT MATCH 'abc'"
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// name.first
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// NOT MATCH
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.NotNil(err)
+	ctx.advanceToken()
 }
