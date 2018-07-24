@@ -4,6 +4,7 @@ package gojsonsm
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -69,6 +70,7 @@ const (
 	OpTypeGreaterThan
 	OpTypeGreaterEquals
 	OpTypeIn
+	OpTypeMatches
 )
 
 func opTypeToString(value OpType) string {
@@ -424,12 +426,18 @@ func (t *Transformer) transformAnyEveryIn(expr AnyEveryInExpr) *ExecNode {
 	return t.transformLoop(LoopTypeAnyEvery, expr.VarId, expr.InExpr, expr.SubExpr)
 }
 
-func (t *Transformer) makeRhsParam(expr Expression) interface{} {
+func (t *Transformer) makeRhsParam(expr Expression, op OpType) interface{} {
 	if rhsField, ok := expr.(FieldExpr); ok {
 		rhsNode := t.getExecNode(rhsField)
 		rhsStoreId := rhsNode.makeStored(t)
 		return VarRef{rhsStoreId}
 	} else if rhsValue, ok := expr.(ValueExpr); ok {
+		if op == OpTypeMatches {
+			regex, err := regexp.Compile(rhsValue.Value.(string))
+			if err == nil {
+				return NewFastVal(regex)
+			}
+		}
 		val := NewFastVal(rhsValue.Value)
 		if val.IsStringLike() {
 			val, _ = val.AsJsonString()
@@ -453,7 +461,7 @@ func (t *Transformer) transformComparison(op OpType, lhs, rhs Expression) *ExecN
 		execNode.Ops = append(execNode.Ops, &OpNode{
 			t.ActiveBucketIdx,
 			op,
-			t.makeRhsParam(rhs),
+			t.makeRhsParam(rhs, op),
 		})
 	} else {
 		panic("LHS of a comparison expression must be a FieldExpr")
@@ -486,6 +494,10 @@ func (t *Transformer) transformGreaterEquals(expr GreaterEqualsExpr) *ExecNode {
 	return t.transformComparison(OpTypeGreaterEquals, expr.Lhs, expr.Rhs)
 }
 
+func (t *Transformer) transformMatches(expr MatchesExpr) *ExecNode {
+	return t.transformComparison(OpTypeMatches, expr.Lhs, expr.Rhs)
+}
+
 func (t *Transformer) transformOne(expr Expression) *ExecNode {
 	switch expr := expr.(type) {
 	case mergeExpr:
@@ -514,6 +526,8 @@ func (t *Transformer) transformOne(expr Expression) *ExecNode {
 		return t.transformGreaterThan(expr)
 	case GreaterEqualsExpr:
 		return t.transformGreaterEquals(expr)
+	case MatchesExpr:
+		return t.transformMatches(expr)
 	}
 	return nil
 }

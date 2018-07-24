@@ -8,6 +8,89 @@ import (
 	"testing"
 )
 
+func TestContextParserToken(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.first == \"Neil\" || (age < 50) || (true)"
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// name.first
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// ==
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// "Neil"
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// ||
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// (age -- will trim and will auto advance
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeParen))
+	assert.Nil(err)
+
+	// age
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	//	fmt.Printf("age token: %v\n", token)
+	ctx.advanceToken()
+
+	// <
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// 50)
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// )
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeEndParen))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// ||
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// (true -- will trim and auto advance
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeParen))
+	assert.Nil(err)
+
+	// true
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeTrue))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// )
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeEndParen))
+	assert.Nil(err)
+	ctx.advanceToken()
+}
+
 // Makes sure that the parsing of subcontext works
 func TestSimpleParserSubContext1(t *testing.T) {
 	assert := assert.New(t)
@@ -377,9 +460,9 @@ func TestContextParserMultiwordToken2(t *testing.T) {
 	assert.Nil(err)
 }
 
-func TestContextParserToken(t *testing.T) {
+func TestContextParserMatch(t *testing.T) {
 	assert := assert.New(t)
-	testString := "name.first == \"Neil\" || (age < 50) || (true)"
+	testString := "name.first MATCHES \"Ne[a|i]l\""
 	ctx, err := NewExpressionParserCtx(testString)
 
 	// name.first
@@ -388,76 +471,20 @@ func TestContextParserToken(t *testing.T) {
 	assert.Nil(err)
 	ctx.advanceToken()
 
-	// ==
-	_, tokenType, err = ctx.getCurrentToken()
+	// MATCH
+	token, tokenType, err := ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("=~", token)
 	assert.Nil(err)
 	ctx.advanceToken()
+	assert.True(ctx.subCtx.opTokenContext.isMatchOp())
 
-	// "Neil"
-	_, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
+	// Ne[a|i]l
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeRegex))
 	assert.Nil(err)
-	ctx.advanceToken()
+	assert.Equal("Ne[a|i]l", token)
 
-	// ||
-	_, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
-	assert.Nil(err)
-	ctx.advanceToken()
-
-	// (age -- will trim and will auto advance
-	_, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeParen))
-	assert.Nil(err)
-
-	// age
-	_, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
-	assert.Nil(err)
-	//	fmt.Printf("age token: %v\n", token)
-	ctx.advanceToken()
-
-	// <
-	_, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
-	assert.Nil(err)
-	ctx.advanceToken()
-
-	// 50)
-	_, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
-	assert.Nil(err)
-	ctx.advanceToken()
-
-	// )
-	_, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeEndParen))
-	assert.Nil(err)
-	ctx.advanceToken()
-
-	// ||
-	_, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
-	assert.Nil(err)
-	ctx.advanceToken()
-
-	// (true -- will trim and auto advance
-	_, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeParen))
-	assert.Nil(err)
-
-	// true
-	_, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeTrue))
-	assert.Nil(err)
-	ctx.advanceToken()
-
-	// )
-	_, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeEndParen))
-	assert.Nil(err)
-	ctx.advanceToken()
 }
 
 func TestSimpleParserCompare(t *testing.T) {
@@ -939,6 +966,170 @@ func TestParserExpressionOutputLessThanEq(t *testing.T) {
 	assert.Nil(err)
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
+}
+
+func TestParserExpressionOutputMatch(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+		["matches",
+		    ["field", "name", "first"],
+		    ["value", "Ne[a|i]l"]
+	    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first =~ \"Ne[a|i]l\""
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Neil",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+}
+
+func TestParserExpressionOutputNotMatch(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+		["not",
+			["matches",
+			    ["field", "name", "first"],
+			    ["value", "Ne[a|i]l"]
+			]
+	    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first NOT MATCH \"Ne[a|i]l\""
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Neil",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.False(match)
+}
+
+func TestParserExpressionOutputMatchNeg(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+		["matches",
+		    ["field", "name", "first"],
+		    ["value", "Ne[a|i]l"]
+	    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first =~ \"Ne[a|i]l\""
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "David",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.False(match)
+}
+
+func TestParserExpressionOutputMatchNotNeg(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+		["not",
+			["matches",
+			    ["field", "name", "first"],
+			    ["value", "Ne[a|i]l"]
+			]
+	    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first NOT MATCH \"Ne[a|i]l\""
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "David",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
 }
 
 func TestParserAlternativeOperators(t *testing.T) {

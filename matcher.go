@@ -125,6 +125,8 @@ func (m *Matcher) matchExec(token tokenType, tokenData []byte, node *ExecNode) e
 
 				var opRes bool
 				switch op.Op {
+				case OpTypeMatches:
+					fallthrough
 				case OpTypeEquals:
 					opRes = litVal.Equals(opVal)
 				case OpTypeNotEquals:

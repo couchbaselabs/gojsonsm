@@ -317,3 +317,19 @@ func (expr GreaterEqualsExpr) RootRefs() []FieldExpr {
 	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
 	return out
 }
+
+type MatchesExpr struct {
+	Lhs Expression
+	Rhs Expression
+}
+
+func (expr MatchesExpr) String() string {
+	return fmt.Sprintf("%s =~ %s", expr.Lhs, expr.Rhs)
+}
+
+func (expr MatchesExpr) RootRefs() []FieldExpr {
+	var out []FieldExpr
+	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
+	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
+	return out
+}
