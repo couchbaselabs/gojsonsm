@@ -142,10 +142,6 @@ func (val FastVal) GetFloat() float64 {
 	return *(*float64)(unsafe.Pointer(&val.rawData))
 }
 
-func (val FastVal) GetRegex() *regexp.Regexp {
-	return val.data.(*regexp.Regexp)
-}
-
 func (val FastVal) AsInt() int64 {
 	switch val.dataType {
 	case IntValue:
@@ -256,6 +252,14 @@ func (val FastVal) AsJsonString() (FastVal, error) {
 	return val, errors.New("invalid type coercion")
 }
 
+func (val FastVal) AsRegex() *regexp.Regexp {
+	switch val.dataType {
+	case RegexValue:
+		return val.data.(*regexp.Regexp)
+	}
+	return nil
+}
+
 func (val FastVal) compareInt(other FastVal) int {
 	intVal := val.AsInt()
 	intOval := other.AsInt()
@@ -310,22 +314,10 @@ func (val FastVal) compareBoolean(other FastVal) int {
 }
 
 func (val FastVal) compareStrings(other FastVal) int {
-	switch other.dataType {
-	case RegexValue:
-		regex := other.GetRegex()
-		escVal, _ := val.AsJsonString()
-		match := regex.Match(escVal.sliceData)
-		if match {
-			return 0
-		} else {
-			return 1
-		}
-	default:
-		// TODO: Improve string comparisons to avoid casting or converting
-		escVal, _ := val.AsJsonString()
-		escOval, _ := other.AsJsonString()
-		return strings.Compare(string(escVal.sliceData), string(escOval.sliceData))
-	}
+	// TODO: Improve string comparisons to avoid casting or converting
+	escVal, _ := val.AsJsonString()
+	escOval, _ := other.AsJsonString()
+	return strings.Compare(string(escVal.sliceData), string(escOval.sliceData))
 }
 
 func (val FastVal) Compare(other FastVal) int {
@@ -366,6 +358,24 @@ func (val FastVal) Compare(other FastVal) int {
 func (val FastVal) Equals(other FastVal) bool {
 	// TODO: I doubt this logic is correct...
 	return val.Compare(other) == 0
+}
+
+func (val FastVal) matchStrings(other FastVal) bool {
+	escVal, _ := val.AsJsonString()
+	return other.AsRegex().Match(escVal.sliceData)
+}
+
+func (val FastVal) Matches(other FastVal) bool {
+	switch val.dataType {
+	case StringValue:
+		return val.matchStrings(other)
+	case BinStringValue:
+		return val.matchStrings(other)
+	case JsonStringValue:
+		return val.matchStrings(other)
+	default:
+		return false
+	}
 }
 
 func NewFastVal(val interface{}) FastVal {

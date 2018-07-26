@@ -17,7 +17,7 @@ import (
  *
  * Parenthesis are allowed, but must be surrounded by at least 1 white space
  * Currently, only the following operations are supported:
- * 		==/=, !=, ||/OR, &&/AND, >=, >, <=, <, MATCHES/=~, NOT MATCH
+ * 		==/=, !=, ||/OR, &&/AND, >=, >, <=, <, LIKE/=~, NOT LIKE
  *
  * Usage example:
  * exprStr := "name.first == "Neil" && (age < 50 || isActive == true)"
@@ -247,7 +247,7 @@ const (
 	TokenOperatorLessThanEq    = "<="
 	TokenOperatorGreaterThan   = ">"
 	TokenOperatorGreaterThanEq = ">="
-	TokenOperatorMatch         = "=~"
+	TokenOperatorLike          = "=~"
 )
 
 // Other allowable operator tokens
@@ -255,11 +255,11 @@ const (
 	TokenOperatorEqual2 = "="
 	TokenOperatorOr2    = "OR"
 	TokenOperatorAnd2   = "AND"
-	TokenOperatorMatch2 = "MATCHES"
+	TokenOperatorLike2  = "LIKE"
 )
 
 // Multi-word operator tokens
-var TokenOperatorNotMatch []string = []string{"NOT", "MATCH"}
+var TokenOperatorNotLike []string = []string{"NOT", "LIKE"}
 var TokenOperatorIsNull []string = []string{"IS", "NULL"}
 var TokenOperatorIsNotNull []string = []string{"IS", "NOT", "NULL"}
 
@@ -276,19 +276,19 @@ func replaceOpTokenIfNecessary(token string) string {
 		return TokenOperatorOr
 	case TokenOperatorAnd2:
 		return TokenOperatorAnd
-	case TokenOperatorMatch2:
-		return TokenOperatorMatch
+	case TokenOperatorLike2:
+		return TokenOperatorLike
 	}
 	return token
 }
 
 func tokenIsOpType(token string) bool {
 	// Equal is both numeric and logical
-	return tokenIsChainOpType(token) || tokenIsEquivalentType(token) || tokenIsCompareOpType(token) || tokenIsMatchType(token)
+	return tokenIsChainOpType(token) || tokenIsEquivalentType(token) || tokenIsCompareOpType(token) || tokenIsLikeType(token)
 }
 
-func tokenIsMatchType(token string) bool {
-	return token == TokenOperatorMatch || token == TokenOperatorMatch2 || token == flattenToken(TokenOperatorNotMatch)
+func tokenIsLikeType(token string) bool {
+	return token == TokenOperatorLike || token == TokenOperatorLike2 || token == flattenToken(TokenOperatorNotLike)
 }
 
 func tokenIsEquivalentType(token string) bool {
@@ -313,7 +313,7 @@ func (opCtx opTokenContext) isCompareOp() bool {
 	return opCtx == compareOp
 }
 
-func (opCtx opTokenContext) isMatchOp() bool {
+func (opCtx opTokenContext) isLikeOp() bool {
 	return opCtx == matchOp
 }
 
@@ -401,17 +401,17 @@ func (ctx *expressionParserContext) checkAndMarkDetailedOpToken(token string) {
 		ctx.subCtx.opTokenContext = chainOp
 	} else if tokenIsCompareOpType(token) {
 		ctx.subCtx.opTokenContext = compareOp
-	} else if tokenIsMatchType(token) {
+	} else if tokenIsLikeType(token) {
 		ctx.subCtx.opTokenContext = matchOp
 	}
 }
 
 func (ctx *expressionParserContext) tokenIsPotentiallyOpType(token string) bool {
-	if token == TokenOperatorNotMatch[0] || token == TokenOperatorIsNull[0] || token == TokenOperatorIsNotNull[0] {
+	if token == TokenOperatorNotLike[0] || token == TokenOperatorIsNull[0] || token == TokenOperatorIsNotNull[0] {
 		ctx.multiwordMapOnce.Do(func() {
 			ctx.multiwordHelperMap = make(map[string]*multiwordHelperPair)
-			ctx.multiwordHelperMap[flattenToken(TokenOperatorNotMatch)] = &multiwordHelperPair{
-				actualMultiWords: TokenOperatorNotMatch,
+			ctx.multiwordHelperMap[flattenToken(TokenOperatorNotLike)] = &multiwordHelperPair{
+				actualMultiWords: TokenOperatorNotLike,
 			}
 			ctx.multiwordHelperMap[flattenToken(TokenOperatorIsNull)] = &multiwordHelperPair{
 				actualMultiWords: TokenOperatorIsNull,
@@ -449,6 +449,7 @@ outerLoop:
 				// Currently multi-tokens are different enough that this works. But it won't work if future tokens
 				// are similar enough, i.e. "NOT LIKE" and "NOT LIKE THIS"
 				ctx.currentTokenIndex += i
+				ctx.checkAndMarkDetailedOpToken(fstr)
 				return fstr, TokenTypeOperator, nil
 			}
 		}
@@ -486,11 +487,27 @@ func (ctx *expressionParserContext) getCurrentTokenParenHelper(token string) (st
 }
 
 func (ctx *expressionParserContext) getTokenValueSubtype() ParseTokenType {
-	if ctx.subCtx.opTokenContext.isMatchOp() {
+	if ctx.subCtx.opTokenContext.isLikeOp() {
 		return TokenTypeRegex
 	} else {
 		return TokenTypeValue
 	}
+}
+
+func (ctx *expressionParserContext) getValueTokenHelper() (string, ParseTokenType, error) {
+	token := ctx.tokens[ctx.currentTokenIndex]
+
+	// For value, strip the double quotes
+	token = strings.Trim(token, "\"")
+
+	if ctx.getTokenValueSubtype() == TokenTypeRegex {
+		_, err := regexp.Compile(token)
+		if err != nil {
+			return token, TokenTypeRegex, err
+		}
+	}
+
+	return token, ctx.getTokenValueSubtype(), nil
 }
 
 func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, error) {
@@ -506,9 +523,7 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 		ctx.checkAndMarkDetailedOpToken(token)
 		return token, TokenTypeOperator, nil
 	} else if valueRegex.MatchString(token) {
-		// For value, strip the double quotes
-		token = strings.Trim(token, "\"")
-		return token, ctx.getTokenValueSubtype(), nil
+		return ctx.getValueTokenHelper()
 	} else if valueNumRegex.MatchString(token) {
 		return token, ctx.getTokenValueSubtype(), nil
 	} else if token == "true" {
@@ -578,7 +593,7 @@ func (ctx *expressionParserContext) checkTokenTypeWithinContext(tokenType ParseT
 		if tokenType.isFieldType() && ctx.subCtx.opTokenContext.isChainOp() {
 			return ctx.getErrorNeedToStartOneNewCtx()
 		} else if tokenType.isBoolType() {
-			if ctx.subCtx.opTokenContext.isCompareOp() || ctx.subCtx.opTokenContext.isMatchOp() {
+			if ctx.subCtx.opTokenContext.isCompareOp() || ctx.subCtx.opTokenContext.isLikeOp() {
 				return fmt.Errorf("Error: Unable to do comparison operator on true or false values")
 			}
 		} else if !tokenType.isValueType() && !tokenType.isFieldType() {
@@ -814,10 +829,10 @@ func (ctx *expressionParserContext) outputNode(node ParserTreeNode, pos int) (Ex
 		fallthrough
 	case TokenTypeFalse:
 		fallthrough
-	case TokenTypeRegex:
-		fallthrough
 	case TokenTypeValue:
 		return ctx.outputValue(node)
+	case TokenTypeRegex:
+		return ctx.outputRegex(node)
 	default:
 		return emptyExpression, fmt.Errorf("Error: Invalid Node token type: %v", node.tokenType.String())
 	}
@@ -825,6 +840,10 @@ func (ctx *expressionParserContext) outputNode(node ParserTreeNode, pos int) (Ex
 
 func (ctx *expressionParserContext) outputValue(node ParserTreeNode) (Expression, error) {
 	return ValueExpr{node.data}, nil
+}
+
+func (ctx *expressionParserContext) outputRegex(node ParserTreeNode) (Expression, error) {
+	return RegexExpr{node.data}, nil
 }
 
 func (ctx *expressionParserContext) outputField(node ParserTreeNode) (Expression, error) {
@@ -869,10 +888,10 @@ func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expr
 		return ctx.outputGreaterThan(node, pos)
 	case TokenOperatorGreaterThanEq:
 		return ctx.outputGreaterThanEq(node, pos)
-	case TokenOperatorMatch:
-		return ctx.outputMatch(node, pos)
-	case flattenToken(TokenOperatorNotMatch):
-		return ctx.outputNotMatch(node, pos)
+	case TokenOperatorLike:
+		return ctx.outputLike(node, pos)
+	case flattenToken(TokenOperatorNotLike):
+		return ctx.outputNotLike(node, pos)
 	default:
 		return emptyExpression, fmt.Errorf("Error: Invalid op type: %s", nodeData)
 	}
@@ -967,20 +986,20 @@ func (ctx *expressionParserContext) outputGreaterThanEq(node ParserTreeNode, pos
 	}, nil
 }
 
-func (ctx *expressionParserContext) outputMatch(node ParserTreeNode, pos int) (Expression, error) {
+func (ctx *expressionParserContext) outputLike(node ParserTreeNode, pos int) (Expression, error) {
 	leftSubExpr, rightSubExpr, err := ctx.getComparisonSubExprsNodes(node, pos)
 	if err != nil {
 		return nil, err
 	}
 
-	return MatchesExpr{
+	return LikeExpr{
 		leftSubExpr,
 		rightSubExpr,
 	}, nil
 }
 
-func (ctx *expressionParserContext) outputNotMatch(node ParserTreeNode, pos int) (Expression, error) {
-	matchExpr, err := ctx.outputMatch(node, pos)
+func (ctx *expressionParserContext) outputNotLike(node ParserTreeNode, pos int) (Expression, error) {
+	matchExpr, err := ctx.outputLike(node, pos)
 	if err != nil {
 		return nil, err
 	}

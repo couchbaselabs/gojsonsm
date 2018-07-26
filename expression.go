@@ -81,6 +81,18 @@ func (expr ValueExpr) RootRefs() []FieldExpr {
 	return nil
 }
 
+type RegexExpr struct {
+	Regex interface{}
+}
+
+func (expr RegexExpr) String() string {
+	return fmt.Sprintf("/%v/", expr.Regex)
+}
+
+func (expr RegexExpr) RootRefs() []FieldExpr {
+	return nil
+}
+
 type NotExpr struct {
 	SubExpr Expression
 }
@@ -318,16 +330,16 @@ func (expr GreaterEqualsExpr) RootRefs() []FieldExpr {
 	return out
 }
 
-type MatchesExpr struct {
+type LikeExpr struct {
 	Lhs Expression
 	Rhs Expression
 }
 
-func (expr MatchesExpr) String() string {
+func (expr LikeExpr) String() string {
 	return fmt.Sprintf("%s =~ %s", expr.Lhs, expr.Rhs)
 }
 
-func (expr MatchesExpr) RootRefs() []FieldExpr {
+func (expr LikeExpr) RootRefs() []FieldExpr {
 	var out []FieldExpr
 	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
 	out = rootSetAdd(out, expr.Rhs.RootRefs()...)

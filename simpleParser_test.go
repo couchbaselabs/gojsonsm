@@ -419,7 +419,7 @@ func TestContextShortCircuit2(t *testing.T) {
 
 func TestContextParserMultiwordToken(t *testing.T) {
 	assert := assert.New(t)
-	testString := "name.first NOT MATCH \"abc\""
+	testString := "name.first NOT LIKE \"abc\""
 	ctx, err := NewExpressionParserCtx(testString)
 
 	// name.first
@@ -428,16 +428,16 @@ func TestContextParserMultiwordToken(t *testing.T) {
 	assert.Nil(err)
 	ctx.advanceToken()
 
-	// NOT MATCH
+	// NOT LIKE
 	token, tokenType, err := ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
-	assert.Equal("NOT_MATCH", token)
+	assert.Equal("NOT_LIKE", token)
 	assert.Nil(err)
 	ctx.advanceToken()
 
 	// abc
 	token, tokenType, err = ctx.getCurrentToken()
-	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeRegex))
 	assert.Nil(err)
 	assert.Equal("abc", token)
 }
@@ -462,7 +462,7 @@ func TestContextParserMultiwordToken2(t *testing.T) {
 
 func TestContextParserMatch(t *testing.T) {
 	assert := assert.New(t)
-	testString := "name.first MATCHES \"Ne[a|i]l\""
+	testString := "name.first LIKE \"Ne[a|i]l\""
 	ctx, err := NewExpressionParserCtx(testString)
 
 	// name.first
@@ -471,13 +471,13 @@ func TestContextParserMatch(t *testing.T) {
 	assert.Nil(err)
 	ctx.advanceToken()
 
-	// MATCH
+	// LIKE
 	token, tokenType, err := ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
 	assert.Equal("=~", token)
 	assert.Nil(err)
 	ctx.advanceToken()
-	assert.True(ctx.subCtx.opTokenContext.isMatchOp())
+	assert.True(ctx.subCtx.opTokenContext.isLikeOp())
 
 	// Ne[a|i]l
 	token, tokenType, err = ctx.getCurrentToken()
@@ -972,9 +972,9 @@ func TestParserExpressionOutputMatch(t *testing.T) {
 	assert := assert.New(t)
 
 	matchJson := []byte(`
-		["matches",
+		["like",
 		    ["field", "name", "first"],
-		    ["value", "Ne[a|i]l"]
+		    ["regex", "Ne[a|i]l"]
 	    ]`)
 
 	jsonExpr, err := ParseJsonExpression(matchJson)
@@ -1008,55 +1008,13 @@ func TestParserExpressionOutputMatch(t *testing.T) {
 	assert.True(match)
 }
 
-func TestParserExpressionOutputNotMatch(t *testing.T) {
-	assert := assert.New(t)
-
-	matchJson := []byte(`
-		["not",
-			["matches",
-			    ["field", "name", "first"],
-			    ["value", "Ne[a|i]l"]
-			]
-	    ]`)
-
-	jsonExpr, err := ParseJsonExpression(matchJson)
-	assert.Nil(err)
-	strExpr := "name.first NOT MATCH \"Ne[a|i]l\""
-
-	ctx, err := NewExpressionParserCtx(strExpr)
-	assert.Nil(err)
-
-	err = ctx.parse()
-	assert.Nil(err)
-
-	simpleExpr, err := ctx.outputExpression()
-	assert.Nil(err)
-
-	var trans Transformer
-	matchDef := trans.Transform([]Expression{simpleExpr})
-	assert.NotNil(matchDef)
-
-	assert.Equal(jsonExpr.String(), simpleExpr.String())
-
-	m := NewMatcher(matchDef)
-	userData := map[string]interface{}{
-		"name": map[string]interface{}{
-			"first": "Neil",
-		},
-	}
-	udMarsh, _ := json.Marshal(userData)
-	match, err := m.Match(udMarsh)
-	assert.Nil(err)
-	assert.False(match)
-}
-
 func TestParserExpressionOutputMatchNeg(t *testing.T) {
 	assert := assert.New(t)
 
 	matchJson := []byte(`
-		["matches",
+		["like",
 		    ["field", "name", "first"],
-		    ["value", "Ne[a|i]l"]
+		    ["regex", "Ne[a|i]l"]
 	    ]`)
 
 	jsonExpr, err := ParseJsonExpression(matchJson)
@@ -1095,15 +1053,15 @@ func TestParserExpressionOutputMatchNotNeg(t *testing.T) {
 
 	matchJson := []byte(`
 		["not",
-			["matches",
+			["like",
 			    ["field", "name", "first"],
-			    ["value", "Ne[a|i]l"]
+			    ["regex", "Ne[a|i]l"]
 			]
 	    ]`)
 
 	jsonExpr, err := ParseJsonExpression(matchJson)
 	assert.Nil(err)
-	strExpr := "name.first NOT MATCH \"Ne[a|i]l\""
+	strExpr := "name.first NOT LIKE \"Ne[a|i]l\""
 
 	ctx, err := NewExpressionParserCtx(strExpr)
 	assert.Nil(err)
@@ -1153,6 +1111,48 @@ func TestParserAlternativeOperators(t *testing.T) {
 	assert.Nil(err)
 
 	assert.Equal(simpleExpr2.String(), simpleExpr.String())
+}
+
+func TestParserExpressionOutputNotMatch(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+		["not",
+			["like",
+			    ["field", "name", "first"],
+			    ["regex", "Ne[a|i]l"]
+			]
+	    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first NOT LIKE \"Ne[a|i]l\""
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Neil",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.False(match)
 }
 
 // NEGATIVE test cases
@@ -1335,7 +1335,7 @@ func TestParserExpressionWithGreaterThan(t *testing.T) {
 
 func TestContextParserNegMultiwordToken(t *testing.T) {
 	assert := assert.New(t)
-	testString := "name.first IS NOT MATCH \"abc\""
+	testString := "name.first IS NOT LIKE \"abc\""
 	ctx, err := NewExpressionParserCtx(testString)
 
 	// name.first
@@ -1344,7 +1344,7 @@ func TestContextParserNegMultiwordToken(t *testing.T) {
 	assert.Nil(err)
 	ctx.advanceToken()
 
-	// NOT MATCH
+	// NOT LIKE
 	_, tokenType, err = ctx.getCurrentToken()
 	assert.NotNil(err)
 	ctx.advanceToken()
