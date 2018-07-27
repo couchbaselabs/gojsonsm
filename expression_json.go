@@ -219,6 +219,21 @@ func parseJsonAnyEveryIn(data []interface{}) (Expression, error) {
 	return AnyEveryInExpr{varID, lhsExpr, subexprExpr}, nil
 }
 
+func parseJsonLike(data []interface{}) (Expression, error) {
+	lhs, rhs, err := parseJsonComparison(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return LikeExpr{lhs, rhs}, nil
+}
+
+func parseJsonRegex(data []interface{}) (Expression, error) {
+	return RegexExpr{
+		data[1],
+	}, nil
+}
+
 func parseJsonSubexpr(data []interface{}) (Expression, error) {
 	exprType, ok := data[0].(string)
 	if !ok {
@@ -255,6 +270,10 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonGreaterThan(data)
 	case "greaterequals":
 		return parseJsonGreaterEquals(data)
+	case "like":
+		return parseJsonLike(data)
+	case "regex":
+		return parseJsonRegex(data)
 	}
 
 	return nil, errors.New("invalid expression type")

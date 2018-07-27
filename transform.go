@@ -4,6 +4,7 @@ package gojsonsm
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -69,6 +70,7 @@ const (
 	OpTypeGreaterThan
 	OpTypeGreaterEquals
 	OpTypeIn
+	OpTypeMatches
 )
 
 func opTypeToString(value OpType) string {
@@ -435,6 +437,12 @@ func (t *Transformer) makeRhsParam(expr Expression) interface{} {
 			val, _ = val.AsJsonString()
 		}
 		return val
+	} else if rhsValue, ok := expr.(RegexExpr); ok {
+		regex, err := regexp.Compile(rhsValue.Regex.(string))
+		if err != nil {
+			return "??ERROR??"
+		}
+		return NewFastVal(regex)
 	} else {
 		return "??ERROR??"
 	}
@@ -486,6 +494,10 @@ func (t *Transformer) transformGreaterEquals(expr GreaterEqualsExpr) *ExecNode {
 	return t.transformComparison(OpTypeGreaterEquals, expr.Lhs, expr.Rhs)
 }
 
+func (t *Transformer) transformLike(expr LikeExpr) *ExecNode {
+	return t.transformComparison(OpTypeMatches, expr.Lhs, expr.Rhs)
+}
+
 func (t *Transformer) transformOne(expr Expression) *ExecNode {
 	switch expr := expr.(type) {
 	case mergeExpr:
@@ -514,6 +526,8 @@ func (t *Transformer) transformOne(expr Expression) *ExecNode {
 		return t.transformGreaterThan(expr)
 	case GreaterEqualsExpr:
 		return t.transformGreaterEquals(expr)
+	case LikeExpr:
+		return t.transformLike(expr)
 	}
 	return nil
 }

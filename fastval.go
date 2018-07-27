@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -26,6 +27,7 @@ const (
 	StringValue
 	BinStringValue
 	JsonStringValue
+	RegexValue
 	BinaryValue
 	NullValue
 	TrueValue
@@ -250,6 +252,14 @@ func (val FastVal) AsJsonString() (FastVal, error) {
 	return val, errors.New("invalid type coercion")
 }
 
+func (val FastVal) AsRegex() *regexp.Regexp {
+	switch val.dataType {
+	case RegexValue:
+		return val.data.(*regexp.Regexp)
+	}
+	return nil
+}
+
 func (val FastVal) compareInt(other FastVal) int {
 	intVal := val.AsInt()
 	intOval := other.AsInt()
@@ -350,6 +360,24 @@ func (val FastVal) Equals(other FastVal) bool {
 	return val.Compare(other) == 0
 }
 
+func (val FastVal) matchStrings(other FastVal) bool {
+	escVal, _ := val.AsJsonString()
+	return other.AsRegex().Match(escVal.sliceData)
+}
+
+func (val FastVal) Matches(other FastVal) bool {
+	switch val.dataType {
+	case StringValue:
+		return val.matchStrings(other)
+	case BinStringValue:
+		return val.matchStrings(other)
+	case JsonStringValue:
+		return val.matchStrings(other)
+	default:
+		return false
+	}
+}
+
 func NewFastVal(val interface{}) FastVal {
 	switch val := val.(type) {
 	case int8:
@@ -378,6 +406,8 @@ func NewFastVal(val interface{}) FastVal {
 		return NewStringFastVal(val)
 	case []byte:
 		return NewBinaryFastVal(val)
+	case *regexp.Regexp:
+		return NewRegexpFastVal(val)
 	case nil:
 		return NewNullFastVal()
 	}
@@ -482,4 +512,12 @@ func NewJsonUintFastVal(value []byte) FastVal {
 		dataType:  JsonUintValue,
 		sliceData: value,
 	}
+}
+
+func NewRegexpFastVal(value *regexp.Regexp) FastVal {
+	val := FastVal{
+		dataType: RegexValue,
+		data:     value,
+	}
+	return val
 }

@@ -4,340 +4,13 @@ package gojsonsm
 
 import (
 	"encoding/json"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
-
-// Makes sure that the parsing of subcontext works
-func TestSimpleParserSubContext1(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "true || name.first == 'Neil'"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.Nil(err)
-	assert.Equal(5, len(ctx.parserDataNodes))
-	assert.Equal(5, ctx.parserTree.NumNodes())
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(1, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(3, ctx.parserTree.data[1].Right)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(1, ctx.parserTree.data[3].ParentIdx)
-	assert.Equal(4, ctx.parserTree.data[3].Right)
-	assert.Equal(2, ctx.parserTree.data[3].Left)
-}
-
-func TestSimpleParserSubContext2(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "true && name.first == 'Neil' || age < 50"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.Nil(err)
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(5, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(3, ctx.parserTree.data[1].Right)
-	assert.Equal(1, ctx.parserTree.data[3].ParentIdx)
-	assert.Equal(2, ctx.parserTree.data[3].Left)
-	assert.Equal(4, ctx.parserTree.data[3].Right)
-	assert.Equal(5, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[5].ParentIdx)
-	assert.Equal(1, ctx.parserTree.data[5].Left)
-	assert.Equal(7, ctx.parserTree.data[5].Right)
-	assert.Equal(5, ctx.parserTree.data[7].ParentIdx)
-	assert.Equal(6, ctx.parserTree.data[7].Left)
-	assert.Equal(8, ctx.parserTree.data[7].Right)
-}
-
-func TestSimpleParserSubContext2a(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "(true && name.first == 'Neil') || age < 50"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.Nil(err)
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(5, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(3, ctx.parserTree.data[1].Right)
-	assert.Equal(1, ctx.parserTree.data[3].ParentIdx)
-	assert.Equal(2, ctx.parserTree.data[3].Left)
-	assert.Equal(4, ctx.parserTree.data[3].Right)
-	assert.Equal(5, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[5].ParentIdx)
-	assert.Equal(1, ctx.parserTree.data[5].Left)
-	assert.Equal(7, ctx.parserTree.data[5].Right)
-	assert.Equal(5, ctx.parserTree.data[7].ParentIdx)
-	assert.Equal(6, ctx.parserTree.data[7].Left)
-	assert.Equal(8, ctx.parserTree.data[7].Right)
-}
-func TestSimpleParserSubContext3(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "name.first == 'Neil' && age < 50"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.Nil(err)
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(2, ctx.parserTree.data[1].Right)
-	assert.Equal(3, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[3].ParentIdx)
-	assert.Equal(1, ctx.parserTree.data[3].Left)
-	assert.Equal(5, ctx.parserTree.data[3].Right)
-	assert.Equal(3, ctx.parserTree.data[5].ParentIdx)
-	assert.Equal(4, ctx.parserTree.data[5].Left)
-	assert.Equal(6, ctx.parserTree.data[5].Right)
-}
-
-func TestSimpleParserSubContext4(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "name.first == 'Neil' && age < 50 || isActive == true"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.Nil(err)
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(2, ctx.parserTree.data[1].Right)
-	assert.Equal(7, ctx.parserTree.data[3].ParentIdx)
-	assert.Equal(1, ctx.parserTree.data[3].Left)
-	assert.Equal(5, ctx.parserTree.data[3].Right)
-	assert.Equal(3, ctx.parserTree.data[5].ParentIdx)
-	assert.Equal(4, ctx.parserTree.data[5].Left)
-	assert.Equal(6, ctx.parserTree.data[5].Right)
-	assert.Equal(7, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[7].ParentIdx)
-	assert.Equal(3, ctx.parserTree.data[7].Left)
-	assert.Equal(9, ctx.parserTree.data[7].Right)
-	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
-	assert.Equal(8, ctx.parserTree.data[9].Left)
-	assert.Equal(10, ctx.parserTree.data[9].Right)
-}
-
-func TestSimpleParserSubContext4a(t *testing.T) {
-	assert := assert.New(t)
-
-	// This should have short circuiting -> name.first should be checked first
-	testString := "name.first == 'Neil' && age < 50 && isActive == true"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	ctx.enableShortCircuitEvalIfPossible() // NOTE this call - usually wrapped in main func
-	err = ctx.parse()
-	assert.Nil(err)
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(2, ctx.parserTree.data[1].Right)
-	assert.Equal(3, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[3].ParentIdx)
-	assert.Equal(1, ctx.parserTree.data[3].Left)
-	assert.Equal(7, ctx.parserTree.data[3].Right)
-	assert.Equal(7, ctx.parserTree.data[5].ParentIdx)
-	assert.Equal(4, ctx.parserTree.data[5].Left)
-	assert.Equal(6, ctx.parserTree.data[5].Right)
-	assert.Equal(3, ctx.parserTree.data[7].ParentIdx)
-	assert.Equal(5, ctx.parserTree.data[7].Left)
-	assert.Equal(9, ctx.parserTree.data[7].Right)
-	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
-	assert.Equal(8, ctx.parserTree.data[9].Left)
-	assert.Equal(10, ctx.parserTree.data[9].Right)
-}
-
-func TestSimpleParserSubContext4b(t *testing.T) {
-	assert := assert.New(t)
-
-	// Same as 4a but no short circuit eval
-	testString := "name.first == 'Neil' && age < 50 && isActive == true"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.Nil(err)
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(2, ctx.parserTree.data[1].Right)
-	assert.Equal(7, ctx.parserTree.data[3].ParentIdx)
-	assert.Equal(1, ctx.parserTree.data[3].Left)
-	assert.Equal(5, ctx.parserTree.data[3].Right)
-	assert.Equal(3, ctx.parserTree.data[5].ParentIdx)
-	assert.Equal(4, ctx.parserTree.data[5].Left)
-	assert.Equal(6, ctx.parserTree.data[5].Right)
-	assert.Equal(7, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[7].ParentIdx)
-	assert.Equal(3, ctx.parserTree.data[7].Left)
-	assert.Equal(9, ctx.parserTree.data[7].Right)
-	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
-	assert.Equal(8, ctx.parserTree.data[9].Left)
-	assert.Equal(10, ctx.parserTree.data[9].Right)
-}
-
-func TestSimpleParserSubContext5(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "((name.first == 'Neil'))"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.Nil(err)
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(1, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(2, ctx.parserTree.data[1].Right)
-}
-
-func TestSimpleParserSubContext5a(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "( name.first == 'Neil')"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.Nil(err)
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(1, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(2, ctx.parserTree.data[1].Right)
-}
-
-func TestSimpleParserSubContext6(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "name.first == 'Neil' && (age < 50 || isActive == true)"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.Nil(err)
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(2, ctx.parserTree.data[1].Right)
-	assert.Equal(3, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[3].ParentIdx)
-	assert.Equal(1, ctx.parserTree.data[3].Left)
-	assert.Equal(7, ctx.parserTree.data[3].Right)
-	assert.Equal(7, ctx.parserTree.data[5].ParentIdx)
-	assert.Equal(4, ctx.parserTree.data[5].Left)
-	assert.Equal(6, ctx.parserTree.data[5].Right)
-	assert.Equal(3, ctx.parserTree.data[7].ParentIdx)
-	assert.Equal(5, ctx.parserTree.data[7].Left)
-	assert.Equal(9, ctx.parserTree.data[7].Right)
-	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
-	assert.Equal(8, ctx.parserTree.data[9].Left)
-	assert.Equal(10, ctx.parserTree.data[9].Right)
-}
-
-func TestSimpleParserSubContext7(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "(name.first == 'Neil') && (age < 50 || isActive == true)"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.Nil(err)
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(2, ctx.parserTree.data[1].Right)
-	assert.Equal(3, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[3].ParentIdx)
-	assert.Equal(1, ctx.parserTree.data[3].Left)
-	assert.Equal(7, ctx.parserTree.data[3].Right)
-	assert.Equal(7, ctx.parserTree.data[5].ParentIdx)
-	assert.Equal(4, ctx.parserTree.data[5].Left)
-	assert.Equal(6, ctx.parserTree.data[5].Right)
-	assert.Equal(3, ctx.parserTree.data[7].ParentIdx)
-	assert.Equal(5, ctx.parserTree.data[7].Left)
-	assert.Equal(9, ctx.parserTree.data[7].Right)
-	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
-	assert.Equal(8, ctx.parserTree.data[9].Left)
-	assert.Equal(10, ctx.parserTree.data[9].Right)
-}
-
-func TestSimpleParserSubContext7a(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "(name.first == 'Neil' )&& (age < 50 || isActive == true)"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.Nil(err)
-	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
-	assert.NotNil(node)
-
-	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
-	assert.Equal(0, ctx.parserTree.data[1].Left)
-	assert.Equal(2, ctx.parserTree.data[1].Right)
-	assert.Equal(3, ctx.treeHeadIndex)
-	assert.Equal(-1, ctx.parserTree.data[3].ParentIdx)
-	assert.Equal(1, ctx.parserTree.data[3].Left)
-	assert.Equal(7, ctx.parserTree.data[3].Right)
-	assert.Equal(7, ctx.parserTree.data[5].ParentIdx)
-	assert.Equal(4, ctx.parserTree.data[5].Left)
-	assert.Equal(6, ctx.parserTree.data[5].Right)
-	assert.Equal(3, ctx.parserTree.data[7].ParentIdx)
-	assert.Equal(5, ctx.parserTree.data[7].Left)
-	assert.Equal(9, ctx.parserTree.data[7].Right)
-	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
-	assert.Equal(8, ctx.parserTree.data[9].Left)
-	assert.Equal(10, ctx.parserTree.data[9].Right)
-}
-
-func TestContextShortCircuit1(t *testing.T) {
-	assert := assert.New(t)
-	testString := "name.first == 'Neil' || (age < 50) || (true)"
-	ctx, _ := NewExpressionParserCtx(testString)
-
-	ctx.enableShortCircuitEvalIfPossible()
-	assert.True(ctx.shortCircuitEnabled)
-}
-
-func TestContextShortCircuit2(t *testing.T) {
-	assert := assert.New(t)
-	testString := "name.first == 'Neil' || (age < 50) && (true)"
-	ctx, _ := NewExpressionParserCtx(testString)
-
-	ctx.enableShortCircuitEvalIfPossible()
-	assert.False(ctx.shortCircuitEnabled)
-}
 
 func TestContextParserToken(t *testing.T) {
 	assert := assert.New(t)
-	testString := "name.first == 'Neil' || (age < 50) || (true)"
+	testString := "name.first == \"Neil\" || (age < 50) || (true)"
 	ctx, err := NewExpressionParserCtx(testString)
 
 	// name.first
@@ -352,7 +25,7 @@ func TestContextParserToken(t *testing.T) {
 	assert.Nil(err)
 	ctx.advanceToken()
 
-	// 'Neil'
+	// "Neil"
 	_, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
 	assert.Nil(err)
@@ -416,6 +89,402 @@ func TestContextParserToken(t *testing.T) {
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeEndParen))
 	assert.Nil(err)
 	ctx.advanceToken()
+}
+
+// Makes sure that the parsing of subcontext works
+func TestSimpleParserSubContext1(t *testing.T) {
+	assert := assert.New(t)
+
+	testString := "true || name.first == \"Neil\""
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	assert.Equal(5, len(ctx.parserDataNodes))
+	assert.Equal(5, ctx.parserTree.NumNodes())
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(1, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(3, ctx.parserTree.data[1].Right)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(1, ctx.parserTree.data[3].ParentIdx)
+	assert.Equal(4, ctx.parserTree.data[3].Right)
+	assert.Equal(2, ctx.parserTree.data[3].Left)
+}
+
+func TestSimpleParserSubContext2(t *testing.T) {
+	assert := assert.New(t)
+
+	testString := "true && name.first == \"Neil\" || age < 50"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(5, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(3, ctx.parserTree.data[1].Right)
+	assert.Equal(1, ctx.parserTree.data[3].ParentIdx)
+	assert.Equal(2, ctx.parserTree.data[3].Left)
+	assert.Equal(4, ctx.parserTree.data[3].Right)
+	assert.Equal(5, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[5].ParentIdx)
+	assert.Equal(1, ctx.parserTree.data[5].Left)
+	assert.Equal(7, ctx.parserTree.data[5].Right)
+	assert.Equal(5, ctx.parserTree.data[7].ParentIdx)
+	assert.Equal(6, ctx.parserTree.data[7].Left)
+	assert.Equal(8, ctx.parserTree.data[7].Right)
+}
+
+func TestSimpleParserSubContext2a(t *testing.T) {
+	assert := assert.New(t)
+
+	testString := "(true && name.first == \"Neil\") || age < 50"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(5, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(3, ctx.parserTree.data[1].Right)
+	assert.Equal(1, ctx.parserTree.data[3].ParentIdx)
+	assert.Equal(2, ctx.parserTree.data[3].Left)
+	assert.Equal(4, ctx.parserTree.data[3].Right)
+	assert.Equal(5, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[5].ParentIdx)
+	assert.Equal(1, ctx.parserTree.data[5].Left)
+	assert.Equal(7, ctx.parserTree.data[5].Right)
+	assert.Equal(5, ctx.parserTree.data[7].ParentIdx)
+	assert.Equal(6, ctx.parserTree.data[7].Left)
+	assert.Equal(8, ctx.parserTree.data[7].Right)
+}
+func TestSimpleParserSubContext3(t *testing.T) {
+	assert := assert.New(t)
+
+	testString := "name.first == \"Neil\" && age < 50"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(2, ctx.parserTree.data[1].Right)
+	assert.Equal(3, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[3].ParentIdx)
+	assert.Equal(1, ctx.parserTree.data[3].Left)
+	assert.Equal(5, ctx.parserTree.data[3].Right)
+	assert.Equal(3, ctx.parserTree.data[5].ParentIdx)
+	assert.Equal(4, ctx.parserTree.data[5].Left)
+	assert.Equal(6, ctx.parserTree.data[5].Right)
+}
+
+func TestSimpleParserSubContext4(t *testing.T) {
+	assert := assert.New(t)
+
+	testString := "name.first == \"Neil\" && age < 50 || isActive == true"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(2, ctx.parserTree.data[1].Right)
+	assert.Equal(7, ctx.parserTree.data[3].ParentIdx)
+	assert.Equal(1, ctx.parserTree.data[3].Left)
+	assert.Equal(5, ctx.parserTree.data[3].Right)
+	assert.Equal(3, ctx.parserTree.data[5].ParentIdx)
+	assert.Equal(4, ctx.parserTree.data[5].Left)
+	assert.Equal(6, ctx.parserTree.data[5].Right)
+	assert.Equal(7, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[7].ParentIdx)
+	assert.Equal(3, ctx.parserTree.data[7].Left)
+	assert.Equal(9, ctx.parserTree.data[7].Right)
+	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
+	assert.Equal(8, ctx.parserTree.data[9].Left)
+	assert.Equal(10, ctx.parserTree.data[9].Right)
+}
+
+func TestSimpleParserSubContext4a(t *testing.T) {
+	assert := assert.New(t)
+
+	// This should have short circuiting -> name.first should be checked first
+	testString := "name.first == \"Neil\" && age < 50 && isActive == true"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	ctx.enableShortCircuitEvalIfPossible() // NOTE this call - usually wrapped in main func
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(2, ctx.parserTree.data[1].Right)
+	assert.Equal(3, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[3].ParentIdx)
+	assert.Equal(1, ctx.parserTree.data[3].Left)
+	assert.Equal(7, ctx.parserTree.data[3].Right)
+	assert.Equal(7, ctx.parserTree.data[5].ParentIdx)
+	assert.Equal(4, ctx.parserTree.data[5].Left)
+	assert.Equal(6, ctx.parserTree.data[5].Right)
+	assert.Equal(3, ctx.parserTree.data[7].ParentIdx)
+	assert.Equal(5, ctx.parserTree.data[7].Left)
+	assert.Equal(9, ctx.parserTree.data[7].Right)
+	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
+	assert.Equal(8, ctx.parserTree.data[9].Left)
+	assert.Equal(10, ctx.parserTree.data[9].Right)
+}
+
+func TestSimpleParserSubContext4b(t *testing.T) {
+	assert := assert.New(t)
+
+	// Same as 4a but no short circuit eval
+	testString := "name.first == \"Neil\" && age < 50 && isActive == true"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(2, ctx.parserTree.data[1].Right)
+	assert.Equal(7, ctx.parserTree.data[3].ParentIdx)
+	assert.Equal(1, ctx.parserTree.data[3].Left)
+	assert.Equal(5, ctx.parserTree.data[3].Right)
+	assert.Equal(3, ctx.parserTree.data[5].ParentIdx)
+	assert.Equal(4, ctx.parserTree.data[5].Left)
+	assert.Equal(6, ctx.parserTree.data[5].Right)
+	assert.Equal(7, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[7].ParentIdx)
+	assert.Equal(3, ctx.parserTree.data[7].Left)
+	assert.Equal(9, ctx.parserTree.data[7].Right)
+	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
+	assert.Equal(8, ctx.parserTree.data[9].Left)
+	assert.Equal(10, ctx.parserTree.data[9].Right)
+}
+
+func TestSimpleParserSubContext5(t *testing.T) {
+	assert := assert.New(t)
+
+	testString := "((name.first == \"Neil\"))"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(1, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(2, ctx.parserTree.data[1].Right)
+}
+
+func TestSimpleParserSubContext5a(t *testing.T) {
+	assert := assert.New(t)
+
+	testString := "( name.first == \"Neil\")"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(1, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(2, ctx.parserTree.data[1].Right)
+}
+
+func TestSimpleParserSubContext6(t *testing.T) {
+	assert := assert.New(t)
+
+	testString := "name.first == \"Neil\" && (age < 50 || isActive == true)"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(2, ctx.parserTree.data[1].Right)
+	assert.Equal(3, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[3].ParentIdx)
+	assert.Equal(1, ctx.parserTree.data[3].Left)
+	assert.Equal(7, ctx.parserTree.data[3].Right)
+	assert.Equal(7, ctx.parserTree.data[5].ParentIdx)
+	assert.Equal(4, ctx.parserTree.data[5].Left)
+	assert.Equal(6, ctx.parserTree.data[5].Right)
+	assert.Equal(3, ctx.parserTree.data[7].ParentIdx)
+	assert.Equal(5, ctx.parserTree.data[7].Left)
+	assert.Equal(9, ctx.parserTree.data[7].Right)
+	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
+	assert.Equal(8, ctx.parserTree.data[9].Left)
+	assert.Equal(10, ctx.parserTree.data[9].Right)
+}
+
+func TestSimpleParserSubContext7(t *testing.T) {
+	assert := assert.New(t)
+
+	testString := "(name.first == \"Neil\") && (age < 50 || isActive == true)"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(2, ctx.parserTree.data[1].Right)
+	assert.Equal(3, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[3].ParentIdx)
+	assert.Equal(1, ctx.parserTree.data[3].Left)
+	assert.Equal(7, ctx.parserTree.data[3].Right)
+	assert.Equal(7, ctx.parserTree.data[5].ParentIdx)
+	assert.Equal(4, ctx.parserTree.data[5].Left)
+	assert.Equal(6, ctx.parserTree.data[5].Right)
+	assert.Equal(3, ctx.parserTree.data[7].ParentIdx)
+	assert.Equal(5, ctx.parserTree.data[7].Left)
+	assert.Equal(9, ctx.parserTree.data[7].Right)
+	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
+	assert.Equal(8, ctx.parserTree.data[9].Left)
+	assert.Equal(10, ctx.parserTree.data[9].Right)
+}
+
+func TestSimpleParserSubContext7a(t *testing.T) {
+	assert := assert.New(t)
+
+	testString := "(name.first == \"Neil\" )&& (age < 50 || isActive == true)"
+	ctx, err := NewExpressionParserCtx(testString)
+	assert.Equal(fieldMode, ctx.subCtx.currentMode)
+	err = ctx.parse()
+	assert.Nil(err)
+	node := ctx.parserDataNodes[ctx.subCtx.lastParserDataNode]
+	assert.NotNil(node)
+
+	assert.Equal(3, ctx.parserTree.data[1].ParentIdx)
+	assert.Equal(0, ctx.parserTree.data[1].Left)
+	assert.Equal(2, ctx.parserTree.data[1].Right)
+	assert.Equal(3, ctx.treeHeadIndex)
+	assert.Equal(-1, ctx.parserTree.data[3].ParentIdx)
+	assert.Equal(1, ctx.parserTree.data[3].Left)
+	assert.Equal(7, ctx.parserTree.data[3].Right)
+	assert.Equal(7, ctx.parserTree.data[5].ParentIdx)
+	assert.Equal(4, ctx.parserTree.data[5].Left)
+	assert.Equal(6, ctx.parserTree.data[5].Right)
+	assert.Equal(3, ctx.parserTree.data[7].ParentIdx)
+	assert.Equal(5, ctx.parserTree.data[7].Left)
+	assert.Equal(9, ctx.parserTree.data[7].Right)
+	assert.Equal(7, ctx.parserTree.data[9].ParentIdx)
+	assert.Equal(8, ctx.parserTree.data[9].Left)
+	assert.Equal(10, ctx.parserTree.data[9].Right)
+}
+
+func TestContextShortCircuit1(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.first == \"Neil\" || (age < 50) || (true)"
+	ctx, _ := NewExpressionParserCtx(testString)
+
+	ctx.enableShortCircuitEvalIfPossible()
+	assert.True(ctx.shortCircuitEnabled)
+}
+
+func TestContextShortCircuit2(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.first == \"Neil\" || (age < 50) && (true)"
+	ctx, _ := NewExpressionParserCtx(testString)
+
+	ctx.enableShortCircuitEvalIfPossible()
+	assert.False(ctx.shortCircuitEnabled)
+}
+
+func TestContextParserMultiwordToken(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.first NOT LIKE \"abc\""
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// name.first
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// NOT LIKE
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("NOT_LIKE", token)
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// abc
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeRegex))
+	assert.Nil(err)
+	assert.Equal("abc", token)
+}
+
+func TestContextParserMultiwordToken2(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.first IS NOT NULL"
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// name.first
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// IS NOT NULL
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("IS_NOT_NULL", token)
+	assert.Nil(err)
+}
+
+func TestContextParserMatch(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.first LIKE \"Ne[a|i]l\""
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// name.first
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// LIKE
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("=~", token)
+	assert.Nil(err)
+	ctx.advanceToken()
+	assert.True(ctx.subCtx.opTokenContext.isLikeOp())
+
+	// Ne[a|i]l
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeRegex))
+	assert.Nil(err)
+	assert.Equal("Ne[a|i]l", token)
+
 }
 
 func TestSimpleParserCompare(t *testing.T) {
@@ -482,7 +551,7 @@ func TestParserExpressionOutput2a(t *testing.T) {
 	jsonExpr, err := ParseJsonExpression(matchJson)
 	assert.Nil(err)
 
-	strExpr := "name.first == 'Neil' || (age < 50 && isActive == true)"
+	strExpr := "name.first == \"Neil\" || (age < 50 && isActive == true)"
 
 	ctx, err := NewExpressionParserCtx(strExpr)
 	assert.Nil(err)
@@ -653,7 +722,7 @@ func TestParserExpressionOutputNot3(t *testing.T) {
 	assert.Nil(err)
 	assert.True(match)
 
-	strExpr := "name.first == 'David' || (age < 50 && isActive != true)"
+	strExpr := "name.first == \"David\" || (age < 50 && isActive != true)"
 
 	ctx, err := NewExpressionParserCtx(strExpr)
 	assert.Nil(err)
@@ -711,7 +780,7 @@ func TestParserExpressionOutputGreaterThan(t *testing.T) {
 	assert.Nil(err)
 	assert.True(match)
 
-	strExpr := "name.first == 'David' || (age > 50 && isActive == true)"
+	strExpr := "name.first == \"David\" || (age > 50 && isActive == true)"
 
 	ctx, err := NewExpressionParserCtx(strExpr)
 	assert.Nil(err)
@@ -769,7 +838,7 @@ func TestParserExpressionOutputGreaterThanEquals(t *testing.T) {
 	assert.Nil(err)
 	assert.True(match)
 
-	strExpr := "name.first == 'David' || (age >= 50 && isActive == true)"
+	strExpr := "name.first == \"David\" || (age >= 50 && isActive == true)"
 
 	ctx, err := NewExpressionParserCtx(strExpr)
 	assert.Nil(err)
@@ -827,7 +896,7 @@ func TestParserExpressionOutputLessThan(t *testing.T) {
 	assert.Nil(err)
 	assert.True(match)
 
-	strExpr := "name.first == 'David' || (age < 50 && isActive == true)"
+	strExpr := "name.first == \"David\" || (age < 50 && isActive == true)"
 
 	ctx, err := NewExpressionParserCtx(strExpr)
 	assert.Nil(err)
@@ -885,7 +954,7 @@ func TestParserExpressionOutputLessThanEq(t *testing.T) {
 	assert.Nil(err)
 	assert.True(match)
 
-	strExpr := "name.first == 'David' || (age <= 50 && isActive == true)"
+	strExpr := "name.first == \"David\" || (age <= 50 && isActive == true)"
 
 	ctx, err := NewExpressionParserCtx(strExpr)
 	assert.Nil(err)
@@ -899,11 +968,198 @@ func TestParserExpressionOutputLessThanEq(t *testing.T) {
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 }
 
+func TestParserExpressionOutputMatch(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+		["like",
+		    ["field", "name", "first"],
+		    ["regex", "Ne[a|i]l"]
+	    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first =~ \"Ne[a|i]l\""
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Neil",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+}
+
+func TestParserExpressionOutputMatchNeg(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+		["like",
+		    ["field", "name", "first"],
+		    ["regex", "Ne[a|i]l"]
+	    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first =~ \"Ne[a|i]l\""
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "David",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.False(match)
+}
+
+func TestParserExpressionOutputMatchNotNeg(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+		["not",
+			["like",
+			    ["field", "name", "first"],
+			    ["regex", "Ne[a|i]l"]
+			]
+	    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first NOT LIKE \"Ne[a|i]l\""
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "David",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+}
+
+func TestParserAlternativeOperators(t *testing.T) {
+	assert := assert.New(t)
+	strExpr := "name.first == \"David\" || (age < 50 && isActive != true)"
+	strExpr2 := "name.first = \"David\" OR (age < 50 AND isActive != true)"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+	ctx2, err := NewExpressionParserCtx(strExpr2)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+	err = ctx2.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+	simpleExpr2, err := ctx2.outputExpression()
+	assert.Nil(err)
+
+	assert.Equal(simpleExpr2.String(), simpleExpr.String())
+}
+
+func TestParserExpressionOutputNotMatch(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+		["not",
+			["like",
+			    ["field", "name", "first"],
+			    ["regex", "Ne[a|i]l"]
+			]
+	    ]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first NOT LIKE \"Ne[a|i]l\""
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Neil",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.False(match)
+}
+
 // NEGATIVE test cases
 func TestSimpleParserParenMismatch(t *testing.T) {
 	assert := assert.New(t)
 
-	testString := "(name.first == 'Neil'))"
+	testString := "(name.first == \"Neil\"))"
 	ctx, err := NewExpressionParserCtx(testString)
 	assert.Equal(fieldMode, ctx.subCtx.currentMode)
 	err = ctx.parse()
@@ -913,7 +1169,7 @@ func TestSimpleParserParenMismatch(t *testing.T) {
 func TestSimpleParserParenMismatch2(t *testing.T) {
 	assert := assert.New(t)
 
-	testString := "((name.first == 'Neil')"
+	testString := "((name.first == \"Neil\")"
 	ctx, err := NewExpressionParserCtx(testString)
 	assert.Equal(fieldMode, ctx.subCtx.currentMode)
 	err = ctx.parse()
@@ -1004,7 +1260,7 @@ func TestSimpleParserNeg5(t *testing.T) {
 func TestSimpleParserNeg6(t *testing.T) {
 	assert := assert.New(t)
 
-	testString := "'Neil' == name.first && 50 > age"
+	testString := "\"Neil\" == name.first && 50 > age"
 	ctx, err := NewExpressionParserCtx(testString)
 	assert.Equal(fieldMode, ctx.subCtx.currentMode)
 	err = ctx.parse()
@@ -1075,4 +1331,21 @@ func TestParserExpressionWithGreaterThan(t *testing.T) {
 
 	_, err = ctx.outputExpression()
 	assert.Nil(err)
+}
+
+func TestContextParserNegMultiwordToken(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.first IS NOT LIKE \"abc\""
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// name.first
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// NOT LIKE
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.NotNil(err)
+	ctx.advanceToken()
 }
