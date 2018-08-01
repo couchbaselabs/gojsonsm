@@ -380,12 +380,9 @@ func (m *Matcher) Match(data []byte) (bool, error) {
 		return false, err
 	}
 
-	// If the DAG was not resolved, it means that conditions
-	// were not encountered (the document was missing parts of
-	// the expected paths).
-	if !m.buckets.IsResolved(0) {
-		return false, nil
-	}
+	// Resolve any outstanding buckets in the tree.  This is required for
+	// operators such as NOT and NEOR to correctly be resolved.
+	m.buckets.Resolve()
 
 	return m.buckets.IsTrue(0), nil
 }
