@@ -69,6 +69,7 @@ const (
 	OpTypeLessEquals
 	OpTypeGreaterThan
 	OpTypeGreaterEquals
+	OpTypeExists
 	OpTypeIn
 	OpTypeMatches
 )
@@ -89,6 +90,8 @@ func opTypeToString(value OpType) string {
 		return "gte"
 	case OpTypeIn:
 		return "in"
+	case OpTypeExists:
+		return "exists"
 	}
 
 	return "??unknown??"
@@ -448,6 +451,30 @@ func (t *Transformer) makeRhsParam(expr Expression) interface{} {
 	}
 }
 
+func (t *Transformer) transformExists(expr ExistsExpr) *ExecNode {
+	if lhsField, ok := expr.SubExpr.(FieldExpr); ok {
+		execNode := t.getExecNode(lhsField)
+
+		execNode.Ops = append(execNode.Ops, &OpNode{
+			t.ActiveBucketIdx,
+			OpTypeExists,
+			nil,
+		})
+	} else {
+		panic("LHS of a comparison expression must be a FieldExpr")
+	}
+
+	return nil
+}
+
+func (t *Transformer) transformNotExists(expr NotExistsExpr) *ExecNode {
+	return t.transformOne(NotExpr{
+		ExistsExpr{
+			expr.SubExpr,
+		},
+	})
+}
+
 func (t *Transformer) transformComparison(op OpType, lhs, rhs Expression) *ExecNode {
 	if lhsField, ok := lhs.(FieldExpr); ok {
 		execNode := t.getExecNode(lhsField)
@@ -514,6 +541,10 @@ func (t *Transformer) transformOne(expr Expression) *ExecNode {
 		return t.transformOr(expr)
 	case AndExpr:
 		return t.transformAnd(expr)
+	case ExistsExpr:
+		return t.transformExists(expr)
+	case NotExistsExpr:
+		return t.transformNotExists(expr)
 	case EqualsExpr:
 		return t.transformEquals(expr)
 	case NotEqualsExpr:

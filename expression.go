@@ -234,6 +234,30 @@ func (expr AnyEveryInExpr) RootRefs() []FieldExpr {
 	return out
 }
 
+type ExistsExpr struct {
+	SubExpr Expression
+}
+
+func (expr ExistsExpr) String() string {
+	return fmt.Sprintf("%s EXISTS", expr.SubExpr)
+}
+
+func (expr ExistsExpr) RootRefs() []FieldExpr {
+	return expr.SubExpr.RootRefs()
+}
+
+type NotExistsExpr struct {
+	SubExpr Expression
+}
+
+func (expr NotExistsExpr) String() string {
+	return fmt.Sprintf("%s IS MISSING", expr.SubExpr)
+}
+
+func (expr NotExistsExpr) RootRefs() []FieldExpr {
+	return expr.SubExpr.RootRefs()
+}
+
 type EqualsExpr struct {
 	Lhs Expression
 	Rhs Expression

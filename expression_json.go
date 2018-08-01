@@ -31,6 +31,34 @@ func parseJsonField(data []interface{}) (Expression, error) {
 	return out, nil
 }
 
+func parseJsonExists(data []interface{}) (Expression, error) {
+	subExprData, ok := data[1].([]interface{})
+	if !ok {
+		return nil, errors.New("invalid exists expression subexpr format")
+	}
+
+	subExpr, err := parseJsonSubexpr(subExprData)
+	if err != nil {
+		return nil, err
+	}
+
+	return ExistsExpr{subExpr}, nil
+}
+
+func parseJsonNotExists(data []interface{}) (Expression, error) {
+	subExprData, ok := data[1].([]interface{})
+	if !ok {
+		return nil, errors.New("invalid notexists expression subexpr format")
+	}
+
+	subExpr, err := parseJsonSubexpr(subExprData)
+	if err != nil {
+		return nil, err
+	}
+
+	return NotExistsExpr{subExpr}, nil
+}
+
 func parseJsonComparison(data []interface{}) (Expression, Expression, error) {
 	lhsData, ok := data[1].([]interface{})
 	if !ok {
@@ -258,6 +286,10 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonEveryIn(data)
 	case "anyeveryin":
 		return parseJsonAnyEveryIn(data)
+	case "exists":
+		return parseJsonExists(data)
+	case "notexists":
+		return parseJsonNotExists(data)
 	case "equals":
 		return parseJsonEquals(data)
 	case "notequals":
