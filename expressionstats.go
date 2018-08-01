@@ -60,6 +60,10 @@ func (stats *ExpressionStats) scanOne(expr Expression, loopDepth int) error {
 		}
 		stats.scanOne(expr.InExpr, loopDepth)
 		stats.scanOne(expr.SubExpr, loopDepth+1)
+	case ExistsExpr:
+		stats.scanOne(expr.SubExpr, loopDepth)
+	case NotExistsExpr:
+		stats.scanOne(expr.SubExpr, loopDepth)
 	case EqualsExpr:
 		stats.scanOne(expr.Lhs, loopDepth)
 		stats.scanOne(expr.Rhs, loopDepth)

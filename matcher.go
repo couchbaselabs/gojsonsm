@@ -139,6 +139,8 @@ func (m *Matcher) matchExec(token tokenType, tokenData []byte, node *ExecNode) e
 					opRes = litVal.Compare(opVal) >= 0
 				case OpTypeMatches:
 					opRes = litVal.Matches(opVal)
+				case OpTypeExists:
+					opRes = true
 				default:
 					panic("invalid op type")
 				}
