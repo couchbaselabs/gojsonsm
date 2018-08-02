@@ -106,17 +106,25 @@ func TestBinTree(t *testing.T) {
 	}
 
 	{
-		memTrack := allocTracker{}
+		madeNoAllocs := false
+		for i := 0; i < 100; i++ {
+			memTrack := allocTracker{}
 
-		state := tree.NewState()
+			state := tree.NewState()
 
-		memTrack.Start()
-		state.MarkNode(1, false)
-		state.MarkNode(3, true)
-		state.MarkNode(5, true)
-		memTrack.Stop()
+			memTrack.Start()
+			state.MarkNode(1, false)
+			state.MarkNode(3, true)
+			state.MarkNode(5, true)
+			memTrack.Stop()
 
-		if memTrack.Alloc() != 0 {
+			if memTrack.Alloc() == 0 {
+				madeNoAllocs = true
+				break
+			}
+		}
+
+		if !madeNoAllocs {
 			t.Fatal("marking nodes should not allocate memory")
 		}
 	}
