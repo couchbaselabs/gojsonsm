@@ -10,17 +10,30 @@ import (
 )
 
 /**
- * SimpleParser provides user to be able to specify a C-Styled expression for gojsonsm.
+ * SimpleParser provides user to be able to specify a N1QL-Styled expression for gojsonsm.
  *
  * Values can be string or floats. Strings should be enclosed by double quotes, as to not be confused
  * with field variables
+ *
+ * Embedded objects are accessed via (.) accessor.
+ * Example:
+ * 		name.first == 'Neil'
+ *
+ * Field variables can be escaped by backticks ` to become literals.
+ * Example:
+ * 		`version0.1_serialNumber` LIKE "SN[0-9]+"
+ *
+ * Arrays are accessed with brackets, and integer indexes do not have to be enclosed by backticks.
+ * Example:
+ * 		user[10]
+ * 		US.`users.ids`[10]
  *
  * Parenthesis are allowed, but must be surrounded by at least 1 white space
  * Currently, only the following operations are supported:
  * 		==/=, !=, ||/OR, &&/AND, >=, >, <=, <, LIKE/=~, NOT LIKE
  *
  * Usage example:
- * exprStr := "name.first == "Neil" && (age < 50 || isActive == true)"
+ * exprStr := "name.`first.name` == "Neil" && (age < 50 || isActive == true)"
  * expr, err := ParseSimpleExpression(exprStr)
  *
  * Notes:
@@ -35,12 +48,24 @@ var ErrorNeedToStartNewCtx error = fmt.Errorf("Error: Need to spawn subcontext")
 var ErrorParenMismatch error = fmt.Errorf("Error: Parenthesis mismatch")
 var ErrorParenWSpace error = fmt.Errorf("Error: parenthesis must have white space before or after it")
 var NonErrorOneLayerDone error = fmt.Errorf("One layer has finished")
+var ErrorLeadingZeroes error = fmt.Errorf("Nested mode index must not have leading zeros")
+var ErrorAllInts error = fmt.Errorf("Array index must be a valid integer")
+var ErrorEmptyNest error = fmt.Errorf("Array index cannot be empty")
+var ErrorMissingBacktickBracket error = fmt.Errorf("Invalid field - could not find matching ending backtick or bracket")
+var ErrorEmptyLiteral error = fmt.Errorf("Literals cannot be empty")
+var ErrorEmptyToken error = fmt.Errorf("Token cannot be empty")
 
 // Values by def should be enclosed within single quotes
 var valueRegex *regexp.Regexp = regexp.MustCompile(`^\".*\"$`)
 
 // Or Values can be int or floats by themselves (w/o alpha char)
 var valueNumRegex *regexp.Regexp = regexp.MustCompile(`^(-?)(0|([1-9][0-9]*))(\\.[0-9]+)?$`)
+
+// Field path can be integers
+var fieldTokenInt *regexp.Regexp = regexp.MustCompile(`[0-9]`)
+
+// But they cannot have leading zeros
+var fieldIndexNoLeadingZero *regexp.Regexp = regexp.MustCompile(`[^0][0-9]+`)
 
 type ParserTreeNode struct {
 	tokenType ParseTokenType
@@ -73,7 +98,12 @@ const (
 	chainMode   parseMode = iota
 )
 
-const fieldSeparator = "."
+const (
+	fieldSeparator   string = "."
+	fieldLiteral     string = "`"
+	fieldNestedStart string = "["
+	fieldNestedEnd   string = "]"
+)
 
 func (pm parseMode) String() string {
 	switch pm {
@@ -152,6 +182,8 @@ type expressionParserContext struct {
 	advTokenPositionOnly bool // This flag is set once, and the corresponding method will toggle it off automatically
 	multiwordHelperMap   map[string]*multiwordHelperPair
 	multiwordMapOnce     sync.Once
+	// Split the last successful field token into subtokens for transformer's Path
+	lastFieldTokens []string
 
 	// The levels of parenthesis currently discovered in the expression
 	parenDepth int
@@ -168,16 +200,29 @@ type expressionParserContext struct {
 	parserDataNodes []ParserTreeNode
 	treeHeadIndex   int
 
+	// For field tokens, as the parser checks the syntax of the field, it separates them into subtokens for outputting
+	// to Path for field expressions. This map stores the information. Key is the index of ParserTreeNode
+	fieldTokenPaths map[int][]string
+
 	// Outputting context
 	currentOuputNode int
 }
 
+type checkFieldMode int
+
+const (
+	cfmNone          checkFieldMode = iota
+	cfmBacktick      checkFieldMode = iota
+	cfmNestedNumeric checkFieldMode = iota
+)
+
 func NewExpressionParserCtx(strExpression string) (*expressionParserContext, error) {
 	subCtx := NewParserSubContext()
 	ctx := &expressionParserContext{
-		tokens:        strings.Fields(strExpression),
-		subCtx:        subCtx,
-		treeHeadIndex: -1,
+		tokens:          strings.Fields(strExpression),
+		subCtx:          subCtx,
+		treeHeadIndex:   -1,
+		fieldTokenPaths: make(map[int][]string),
 	}
 	return ctx, nil
 }
@@ -533,12 +578,12 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 	} else if strings.Contains(token, "(") || strings.Contains(token, ")") {
 		return ctx.getCurrentTokenParenHelper(token)
 	} else {
-		return checkTokenFieldToken(token)
+		return ctx.getTokenFieldTokenHelper(token)
 	}
 }
 
 // Checks the syntax of field - i.e. paths, array syntax, etc
-func checkTokenFieldToken(token string) (string, ParseTokenType, error) {
+func (ctx *expressionParserContext) getTokenFieldTokenHelper(token string) (string, ParseTokenType, error) {
 	var err error
 
 	// Field name cannot start or end with a period
@@ -547,7 +592,110 @@ func checkTokenFieldToken(token string) (string, ParseTokenType, error) {
 		err = fmt.Errorf("Invalid field: %v - cannot start or end with a period", token)
 	}
 
-	return token, TokenTypeField, err
+	if err != nil {
+		return token, TokenTypeField, err
+	}
+
+	ctx.lastFieldTokens = make([]string, 0)
+
+	return token, TokenTypeField, checkAndParseField(token, &ctx.lastFieldTokens)
+}
+
+func checkAndParseField(token string, subTokens *[]string) error {
+	var pos int
+	var beginPos int
+	var mode checkFieldMode
+	var nextMode checkFieldMode
+	var skipAppend bool
+
+	if len(token) == 0 {
+		return ErrorEmptyToken
+	}
+
+	for ; pos < len(token); pos++ {
+		switch mode {
+		case cfmNone:
+			switch string(token[pos]) {
+			case fieldSeparator:
+				if !skipAppend {
+					*subTokens = append(*subTokens, string(token[beginPos:pos]))
+					beginPos = pos + 1
+				} else {
+					skipAppend = false
+				}
+			case fieldLiteral:
+				mode = cfmBacktick
+				beginPos = pos + 1
+				nextMode = cfmNone
+			case fieldNestedStart:
+				if !skipAppend {
+					*subTokens = append(*subTokens, string(token[beginPos:pos]))
+				} else {
+					skipAppend = false
+				}
+				beginPos = pos
+				mode = cfmNestedNumeric
+			}
+		case cfmBacktick:
+			// Keep going until we find another literal seperator
+			switch string(token[pos]) {
+			case fieldLiteral:
+				if beginPos == pos {
+					return ErrorEmptyLiteral
+				}
+				*subTokens = append(*subTokens, string(token[beginPos:pos]))
+				mode = nextMode
+				if pos != len(token)-1 && (string(token[pos+1]) == fieldSeparator || string(token[pos+1]) == fieldNestedStart) || pos == len(token)-1 {
+					skipAppend = true
+				}
+			}
+		case cfmNestedNumeric:
+			if pos == beginPos {
+				continue
+			}
+			if pos == beginPos+1 && string(token[pos]) == "0" {
+				return ErrorLeadingZeroes
+			} else if !fieldTokenInt.MatchString(string(token[pos])) && string(token[pos]) != fieldNestedEnd {
+				return ErrorAllInts
+			}
+			switch string(token[pos]) {
+			case fieldNestedEnd:
+				// If nothing was entered between the brackets
+				if pos == beginPos+1 {
+					return ErrorEmptyNest
+				}
+
+				// Advance mode to the next, and skip appending if this is the last or is followed by another nest
+				mode = cfmNone
+				if !skipAppend {
+					*subTokens = append(*subTokens, token[beginPos:pos+1])
+				} else {
+					skipAppend = false
+				}
+				if pos == len(token)-1 || (pos < len(token)-1 && string(token[pos+1]) == fieldNestedStart) {
+					skipAppend = true
+				}
+				// For now, bracket can be used only for array indexing
+			case fieldLiteral:
+				return ErrorAllInts
+			}
+		}
+	}
+
+	// Catch any outstanding mismatched backticks or anything else
+	switch mode {
+	case cfmNone:
+		if !skipAppend {
+			// Capture the last string, whatever it is
+			*subTokens = append(*subTokens, string(token[beginPos:pos]))
+		}
+	case cfmNestedNumeric:
+		fallthrough
+	case cfmBacktick:
+		return ErrorMissingBacktickBracket
+	}
+
+	return nil
 }
 
 func (ctx *expressionParserContext) getErrorNeedToStartNewCtx() error {
@@ -626,6 +774,8 @@ func (ctx *expressionParserContext) insertNode(newNode ParserTreeNode) error {
 		// FieldMode - nothing to do just record this as the last field
 		ctx.subCtx.lastFieldIndex = ctx.subCtx.lastBinTreeDataNode
 		ctx.subCtx.lastSubFieldNode = ctx.subCtx.lastBinTreeDataNode
+		// Store the corresponding path vaiables
+		ctx.fieldTokenPaths[ctx.subCtx.lastBinTreeDataNode] = DeepCopyStringArray(ctx.lastFieldTokens)
 	case chainMode:
 		fallthrough
 	case opMode:
@@ -824,7 +974,7 @@ func (ctx *expressionParserContext) outputNode(node ParserTreeNode, pos int) (Ex
 	case TokenTypeOperator:
 		return ctx.outputOp(node, pos)
 	case TokenTypeField:
-		return ctx.outputField(node)
+		return ctx.outputField(node, pos)
 	case TokenTypeTrue:
 		fallthrough
 	case TokenTypeFalse:
@@ -846,22 +996,14 @@ func (ctx *expressionParserContext) outputRegex(node ParserTreeNode) (Expression
 	return RegexExpr{node.data}, nil
 }
 
-func (ctx *expressionParserContext) outputField(node ParserTreeNode) (Expression, error) {
+func (ctx *expressionParserContext) outputField(node ParserTreeNode, pos int) (Expression, error) {
 	var out FieldExpr
-	fieldVariable, ok := (node.data).(string)
+	path, ok := ctx.fieldTokenPaths[pos]
 	if !ok {
-		// TODO - we support users entering float instead of int...
-		fieldRootVar, ok := (node.data).(int)
-		if !ok {
-			return out, fmt.Errorf("Error: Field input (%v) is not int nor string", node.data)
-		}
-		out.Root = fieldRootVar
-		return out, nil
+		return out, fmt.Errorf("Error: Unable to find internally stored field path")
 	}
 
-	// If field is accessor separated (.) separate it into paths just to be safe
-	// even though it may not be necessary as transformer will put it back
-	out.Path = strings.Split(fieldVariable, fieldSeparator)
+	out.Path = path
 	return out, nil
 }
 
