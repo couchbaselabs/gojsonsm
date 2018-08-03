@@ -339,22 +339,13 @@ func TestMatcherAnyEveryInEquals(t *testing.T) {
 }
 
 func TestMatcherCrossScopeLoop(t *testing.T) {
-	// TODO(brett19): There is a bug workaround for an issue that
-	// if loops use bucket 0, they are incorrectly exited early.
-
 	runJSONExprMatchTest(t, `
-		["or",
+		["anyin",
+		  1,
+		  ["field", "friends"],
 		  ["equals",
-			["field", "name"],
-			["value", "This is a bug workaround!"]
-		  ],
-		  ["anyin",
-			1,
-			["field", "friends"],
-			["equals",
-				["field", 1, "id"],
-				["field", "index"]
-			]
+		  	["field", 1, "id"],
+			  ["field", "index"]
 		  ]
 		]
 	`, []string{
