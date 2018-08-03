@@ -855,7 +855,7 @@ func (ctx *expressionParserContext) outputField(node ParserTreeNode) (Expression
 		if !ok {
 			return out, fmt.Errorf("Error: Field input (%v) is not int nor string", node.data)
 		}
-		out.Root = fieldRootVar
+		out.Root = VariableID(fieldRootVar)
 		return out, nil
 	}
 

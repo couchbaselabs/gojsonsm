@@ -11,7 +11,7 @@ import (
 type SlowMatcher struct {
 	exprs       []Expression
 	exprMatches []bool
-	vars        map[int]interface{}
+	vars        map[VariableID]interface{}
 }
 
 func NewSlowMatcher(exprs []Expression) *SlowMatcher {
@@ -282,7 +282,7 @@ func (m *SlowMatcher) Match(data []byte) (bool, error) {
 	}
 
 	if m.vars == nil {
-		m.vars = make(map[int]interface{})
+		m.vars = make(map[VariableID]interface{})
 	}
 	m.vars[0] = parsedData
 

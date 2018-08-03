@@ -17,7 +17,7 @@ func parseJsonField(data []interface{}) (Expression, error) {
 	var out FieldExpr
 	pos := 1
 	if dataRoot, ok := data[pos].(float64); ok {
-		out.Root = int(dataRoot)
+		out.Root = VariableID(dataRoot)
 		pos++
 	}
 	for ; pos < len(data); pos++ {
@@ -191,7 +191,7 @@ func parseJsonAnd(data []interface{}) (Expression, error) {
 	return out, nil
 }
 
-func parseJsonLoop(data []interface{}) (int, Expression, Expression, error) {
+func parseJsonLoop(data []interface{}) (VariableID, Expression, Expression, error) {
 	varId, ok := data[1].(float64)
 	if !ok {
 		return 0, nil, nil, errors.New("invalid anyin expression variable format")
@@ -217,7 +217,7 @@ func parseJsonLoop(data []interface{}) (int, Expression, Expression, error) {
 		return 0, nil, nil, err
 	}
 
-	return int(varId), lhsExpr, subexprExpr, nil
+	return VariableID(varId), lhsExpr, subexprExpr, nil
 }
 
 func parseJsonAnyIn(data []interface{}) (Expression, error) {
