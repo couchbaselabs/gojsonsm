@@ -9,15 +9,15 @@ import (
 	"strings"
 )
 
-type VariableID int
+type SlotID int
 type BucketID int
 
-type VarRef struct {
-	VarIdx VariableID
+type SlotRef struct {
+	Slot SlotID
 }
 
-func (ref VarRef) String() string {
-	return fmt.Sprintf("$%d", ref.VarIdx)
+func (ref SlotRef) String() string {
+	return fmt.Sprintf("$%d", ref.Slot)
 }
 
 type mergeExpr struct {
@@ -49,11 +49,11 @@ func (expr mergeExpr) RootRefs() []FieldExpr {
 }
 
 type Transformer struct {
-	VarIdx          VariableID
+	SlotIdx         SlotID
 	BucketIdx       BucketID
 	RootExec        *ExecNode
 	RootTree        binTree
-	NodeMap         map[int]*ExecNode
+	NodeMap         map[VariableID]*ExecNode
 	ActiveExec      *ExecNode
 	ActiveBucketIdx BucketID
 	MaxDepth        int
@@ -142,11 +142,11 @@ type LoopNode struct {
 }
 
 type ExecNode struct {
-	StoreId VariableID
+	StoreId SlotID
 	Ops     []*OpNode
 	Elems   map[string]*ExecNode
 	Loops   []LoopNode
-	After   map[VariableID]*ExecNode
+	After   map[SlotID]*ExecNode
 }
 
 type MatchDef struct {
@@ -154,7 +154,7 @@ type MatchDef struct {
 	MatchTree    binTree
 	MatchBuckets []int
 	NumBuckets   int
-	NumFetches   int
+	NumSlots     int
 	MaxDepth     int
 }
 
@@ -171,21 +171,21 @@ func (def MatchDef) String() string {
 		out += fmt.Sprintf("  %d: %d\n", i, bucketID)
 	}
 	out += fmt.Sprintf("num buckets: %d\n", def.NumBuckets)
-	out += fmt.Sprintf("num fetches: %d\n", def.NumFetches)
+	out += fmt.Sprintf("num fetches: %d\n", def.NumSlots)
 	out += fmt.Sprintf("max depth: %d\n", def.MaxDepth)
 	return strings.TrimRight(out, "\n")
 }
 
-func (node *ExecNode) makeStored(t *Transformer) VariableID {
+func (node *ExecNode) makeStored(t *Transformer) SlotID {
 	if node.StoreId == 0 {
-		node.StoreId = t.newVariable()
+		node.StoreId = t.newSlot()
 	}
 	return node.StoreId
 }
 
-func (node *ExecNode) makeAfterNode(varID VariableID) *ExecNode {
+func (node *ExecNode) makeAfterNode(varID SlotID) *ExecNode {
 	if node.After == nil {
-		node.After = make(map[VariableID]*ExecNode)
+		node.After = make(map[SlotID]*ExecNode)
 	} else {
 		foundNode := node.After[varID]
 		if foundNode != nil {
@@ -291,10 +291,10 @@ func (t *Transformer) newBucket() BucketID {
 	return newBucketIdx
 }
 
-func (t *Transformer) newVariable() VariableID {
-	newVariableIdx := t.VarIdx
-	t.VarIdx++
-	return newVariableIdx + 1
+func (t *Transformer) newSlot() SlotID {
+	newSlotID := t.SlotIdx
+	t.SlotIdx++
+	return newSlotID + 1
 }
 
 func (t *Transformer) transformMergePiece(expr mergeExpr, i int) *ExecNode {
@@ -374,7 +374,7 @@ func (t *Transformer) transformAnd(expr AndExpr) *ExecNode {
 	return nil
 }
 
-func (t *Transformer) transformLoop(loopType LoopType, varID int, inExpr, subExpr Expression) *ExecNode {
+func (t *Transformer) transformLoop(loopType LoopType, varID VariableID, inExpr, subExpr Expression) *ExecNode {
 	if rhsField, ok := inExpr.(FieldExpr); ok {
 		newNode := &ExecNode{}
 		execNode := t.getExecNode(rhsField)
@@ -433,7 +433,7 @@ func (t *Transformer) makeRhsParam(expr Expression) interface{} {
 	if rhsField, ok := expr.(FieldExpr); ok {
 		rhsNode := t.getExecNode(rhsField)
 		rhsStoreId := rhsNode.makeStored(t)
-		return VarRef{rhsStoreId}
+		return SlotRef{rhsStoreId}
 	} else if rhsValue, ok := expr.(ValueExpr); ok {
 		val := NewFastVal(rhsValue.Value)
 		if val.IsStringLike() {
@@ -569,7 +569,7 @@ var AlwaysFalseIdent = -2
 func (t *Transformer) Transform(exprs []Expression) *MatchDef {
 	t.RootExec = &ExecNode{}
 	t.ActiveExec = t.RootExec
-	t.NodeMap = make(map[int]*ExecNode)
+	t.NodeMap = make(map[VariableID]*ExecNode)
 
 	t.CurDepth = 1
 	t.MaxDepth = t.CurDepth
@@ -617,7 +617,7 @@ func (t *Transformer) Transform(exprs []Expression) *MatchDef {
 		t.RootExec = nil
 		t.RootTree = binTree{}
 		t.BucketIdx = 0
-		t.VarIdx = 0
+		t.SlotIdx = 0
 		t.MaxDepth = 0
 	}
 
@@ -637,7 +637,7 @@ func (t *Transformer) Transform(exprs []Expression) *MatchDef {
 		MatchTree:    t.RootTree,
 		MatchBuckets: exprBucketIDs,
 		NumBuckets:   int(t.BucketIdx),
-		NumFetches:   int(t.VarIdx),
+		NumSlots:     int(t.SlotIdx),
 		MaxDepth:     t.MaxDepth,
 	}
 }

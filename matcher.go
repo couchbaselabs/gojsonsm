@@ -6,28 +6,28 @@ import (
 	"fmt"
 )
 
-type varData struct {
+type slotData struct {
 	start int
 	size  int
 }
 
 type Matcher struct {
-	def       MatchDef
-	variables []varData
-	buckets   *binTreeState
-	tokens    jsonTokenizer
+	def     MatchDef
+	slots   []slotData
+	buckets *binTreeState
+	tokens  jsonTokenizer
 }
 
 func NewMatcher(def *MatchDef) *Matcher {
 	return &Matcher{
-		def:       *def,
-		variables: make([]varData, def.NumFetches),
-		buckets:   def.MatchTree.NewState(),
+		def:     *def,
+		slots:   make([]slotData, def.NumSlots),
+		buckets: def.MatchTree.NewState(),
 	}
 }
 
 func (m *Matcher) Reset() {
-	m.variables = m.variables[:0]
+	m.slots = m.slots[:0]
 	m.buckets.Reset()
 }
 
@@ -87,8 +87,8 @@ func (m *Matcher) skipValue(token tokenType) error {
 }
 
 func (m *Matcher) resolveParam(in interface{}) FastVal {
-	if opVal, ok := in.(VarRef); ok {
-		panic(fmt.Sprintf("Cannot read %d", opVal.VarIdx))
+	if opVal, ok := in.(SlotRef); ok {
+		panic(fmt.Sprintf("Cannot read %d", opVal.Slot))
 	}
 	if opValV, ok := in.(FastVal); ok {
 		return opValV
@@ -361,7 +361,7 @@ func (m *Matcher) matchExec(token tokenType, tokenData []byte, node *ExecNode) e
 
 	endPos = m.tokens.pos
 	if node.StoreId > 0 {
-		varData := &m.variables[node.StoreId-1]
+		varData := &m.slots[node.StoreId-1]
 		varData.start = startPos
 		varData.size = endPos - startPos
 	}

@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+type VariableID int
+
 func fieldExprCompare(lhs FieldExpr, rhs FieldExpr) bool {
 	if rhs.Root != lhs.Root {
 		return false
@@ -156,7 +158,7 @@ func (expr OrExpr) RootRefs() []FieldExpr {
 }
 
 type FieldExpr struct {
-	Root int
+	Root VariableID
 	Path []string
 }
 
@@ -181,7 +183,7 @@ func (expr FieldExpr) RootRefs() []FieldExpr {
 }
 
 type AnyInExpr struct {
-	VarId   int
+	VarId   VariableID
 	InExpr  Expression
 	SubExpr Expression
 }
@@ -199,7 +201,7 @@ func (expr AnyInExpr) RootRefs() []FieldExpr {
 }
 
 type EveryInExpr struct {
-	VarId   int
+	VarId   VariableID
 	InExpr  Expression
 	SubExpr Expression
 }
@@ -217,7 +219,7 @@ func (expr EveryInExpr) RootRefs() []FieldExpr {
 }
 
 type AnyEveryInExpr struct {
-	VarId   int
+	VarId   VariableID
 	InExpr  Expression
 	SubExpr Expression
 }
