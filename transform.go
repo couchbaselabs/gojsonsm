@@ -417,6 +417,11 @@ func (t *Transformer) transformLoop(expr Expression, loopType LoopType, varID Va
 		panic(err)
 	}
 
+	baseBucketIdx := t.ActiveBucketIdx
+	t.RootTree.data[baseBucketIdx].NodeType = nodeTypeLoop
+	t.newBucket()
+	t.RootTree.data[baseBucketIdx].Left = int(t.ActiveBucketIdx)
+
 	baseNode.AddLoop(LoopNode{
 		t.ActiveBucketIdx,
 		loopType,

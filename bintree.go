@@ -16,6 +16,7 @@ const (
 	nodeTypeAnd
 	nodeTypeNot
 	nodeTypeNeor
+	nodeTypeLoop
 )
 
 func binTreeNodeTypeToString(nodeType BinTreeNodeType) string {
@@ -30,6 +31,8 @@ func binTreeNodeTypeToString(nodeType BinTreeNodeType) string {
 		return "not"
 	case nodeTypeNeor:
 		return "neor"
+	case nodeTypeLoop:
+		return "loop"
 	}
 	return "??ERROR??"
 }
@@ -39,7 +42,7 @@ func binTreeNodeTypeHasLeft(nodeType BinTreeNodeType) bool {
 }
 
 func binTreeNodeTypeHasRight(nodeType BinTreeNodeType) bool {
-	return nodeType != nodeTypeLeaf && nodeType != nodeTypeNot
+	return nodeType != nodeTypeLeaf && nodeType != nodeTypeNot && nodeType != nodeTypeLoop
 }
 
 type binTreePointers struct {
@@ -159,17 +162,25 @@ func (tree *binTree) validateItem(item int, parent int) (int, error) {
 	case nodeTypeOr:
 	case nodeTypeNot:
 	case nodeTypeNeor:
+	case nodeTypeLoop:
 	default:
 		// Invalid node type
 		return -1, errors.New("unexpected node type")
 	}
 
-	// Left must be set, and be inside the tree
-	if idata.Left <= 0 || idata.Left >= len(tree.data) {
-		return -1, errors.New("expected left to be defined, and inside the tree")
+	if !binTreeNodeTypeHasLeft(idata.NodeType) {
+		// Left must not be set
+		if idata.Left != 0 {
+			return -1, errors.New("expected left to be undefined")
+		}
+	} else {
+		// Left must be set, and be inside the tree
+		if idata.Left <= 0 || idata.Left >= len(tree.data) {
+			return -1, errors.New("expected left to be defined, and inside the tree")
+		}
 	}
 
-	if idata.NodeType == nodeTypeNot {
+	if !binTreeNodeTypeHasRight(idata.NodeType) {
 		// Right must not be set
 		if idata.Right != 0 {
 			return -1, errors.New("expected right to be undefined")
@@ -182,14 +193,17 @@ func (tree *binTree) validateItem(item int, parent int) (int, error) {
 	}
 
 	// Check the children
+	var err error
 	pos := item + 1
 
-	pos, err := tree.validateItem(pos, item)
-	if err != nil {
-		return -1, err
+	if binTreeNodeTypeHasLeft(idata.NodeType) {
+		pos, err = tree.validateItem(pos, item)
+		if err != nil {
+			return -1, err
+		}
 	}
 
-	if idata.NodeType != nodeTypeNot {
+	if binTreeNodeTypeHasRight(idata.NodeType) {
 		pos, err = tree.validateItem(pos, item)
 		if err != nil {
 			return -1, err
@@ -336,6 +350,13 @@ func (state *binTreeState) checkNode(index int) {
 			state.MarkNode(index, !true)
 		} else if state.data[defNode.Left] == binTreeStateFalse {
 			state.MarkNode(index, !false)
+		}
+		return
+	} else if defNode.NodeType == nodeTypeLoop {
+		if state.data[defNode.Left] == binTreeStateTrue {
+			state.MarkNode(index, true)
+		} else if state.data[defNode.Left] == binTreeStateFalse {
+			state.MarkNode(index, false)
 		}
 		return
 	}
