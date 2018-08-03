@@ -7,7 +7,34 @@ import (
 )
 
 type SlotID int
+
+func (id SlotID) String() string {
+	return fmt.Sprintf("#%d", id)
+}
+
 type BucketID int
+
+func (id BucketID) String() string {
+	return fmt.Sprintf("%%%d", id)
+}
+
+type DataRef interface {
+	String() string
+}
+
+func dataRefToString(ref DataRef) string {
+	if ref == nil {
+		return activeLitRef{}.String()
+	}
+	return ref.String()
+}
+
+type activeLitRef struct {
+}
+
+func (activeLitRef) String() string {
+	return "@"
+}
 
 type SlotRef struct {
 	Slot SlotID
@@ -31,7 +58,7 @@ const (
 	OpTypeMatches
 )
 
-func opTypeToString(value OpType) string {
+func (value OpType) String() string {
 	switch value {
 	case OpTypeEquals:
 		return "eq"
@@ -57,18 +84,16 @@ func opTypeToString(value OpType) string {
 type OpNode struct {
 	BucketIdx BucketID
 	Op        OpType
-	Rhs       interface{}
+	Lhs       DataRef
+	Rhs       DataRef
 }
 
 func (op OpNode) String() string {
-	var out string
-	out += fmt.Sprintf("[%d] %s", op.BucketIdx, opTypeToString(op.Op))
-
-	if op.Rhs != nil {
-		out += " " + fmt.Sprintf("%v", op.Rhs)
-	}
-
-	return out
+	return fmt.Sprintf("[%d] %s %s %s",
+		op.BucketIdx,
+		dataRefToString(op.Lhs),
+		op.Op,
+		dataRefToString(op.Rhs))
 }
 
 type LoopType int
@@ -79,7 +104,7 @@ const (
 	LoopTypeAnyEvery
 )
 
-func loopTypeToString(value LoopType) string {
+func (value LoopType) String() string {
 	switch value {
 	case LoopTypeAny:
 		return "any"
@@ -95,15 +120,54 @@ func loopTypeToString(value LoopType) string {
 type LoopNode struct {
 	BucketIdx BucketID
 	Mode      LoopType
+	Target    DataRef
 	Node      *ExecNode
+}
+
+func (node *LoopNode) String() string {
+	out := ""
+	out += fmt.Sprintf("[%d] :%s in %s:\n", node.BucketIdx, node.Mode, dataRefToString(node.Target))
+	out += reindentString(node.Node.String(), "  ")
+	return out
+}
+
+type AfterNode struct {
+	Ops   []OpNode
+	Loops []LoopNode
 }
 
 type ExecNode struct {
 	StoreId SlotID
-	Ops     []*OpNode
 	Elems   map[string]*ExecNode
+	Ops     []OpNode
 	Loops   []LoopNode
-	After   map[SlotID]*ExecNode
+	After   *AfterNode
+}
+
+type MatchDef struct {
+	ParseNode    *ExecNode
+	MatchTree    binTree
+	MatchBuckets []int
+	NumBuckets   int
+	NumSlots     int
+}
+
+func (def MatchDef) String() string {
+	var out string
+	out += "match tree:\n"
+	out += "  $doc:\n"
+	out += reindentString(def.ParseNode.String(), "    ")
+	out += "\n"
+	out += "bin tree:\n"
+	out += reindentString(def.MatchTree.String(), "  ")
+	out += "\n"
+	out += "match buckets:\n"
+	for i, bucketID := range def.MatchBuckets {
+		out += fmt.Sprintf("  %d: %d\n", i, bucketID)
+	}
+	out += fmt.Sprintf("num buckets: %d\n", def.NumBuckets)
+	out += fmt.Sprintf("num slots: %d\n", def.NumSlots)
+	return strings.TrimRight(out, "\n")
 }
 
 func (node ExecNode) String() string {
@@ -137,51 +201,31 @@ func (node ExecNode) String() string {
 		}
 	}
 
-	if node.Loops != nil {
+	if len(node.Loops) > 0 {
 		out += fmt.Sprintf(":loops\n")
 		for _, loop := range node.Loops {
-			out += fmt.Sprintf("[%d] :%s:\n", loop.BucketIdx, loopTypeToString(loop.Mode))
-
-			out += reindentString(loop.Node.String(), "  ")
+			out += reindentString(loop.String(), "  ")
 			out += "\n"
 		}
 	}
 
 	if node.After != nil {
-		out += fmt.Sprintf(":after:\n")
-		for varId, anode := range node.After {
-			out += fmt.Sprintf("  #with $%d:\n", varId)
-			out += reindentString(anode.String(), "    ")
-			out += "\n"
+		if len(node.After.Ops) > 0 {
+			out += fmt.Sprintf(":after-ops:\n")
+			for _, anode := range node.After.Ops {
+				out += reindentString(anode.String(), "  ")
+				out += "\n"
+			}
+		}
+
+		if len(node.After.Loops) > 0 {
+			out += fmt.Sprintf(":after-loops:\n")
+			for _, loop := range node.After.Loops {
+				out += reindentString(loop.String(), "  ")
+				out += "\n"
+			}
 		}
 	}
 
-	return strings.TrimRight(out, "\n")
-}
-
-type MatchDef struct {
-	ParseNode    *ExecNode
-	MatchTree    binTree
-	MatchBuckets []int
-	NumBuckets   int
-	NumSlots     int
-	MaxDepth     int
-}
-
-func (def MatchDef) String() string {
-	var out string
-	out += "match tree:\n"
-	out += reindentString(def.ParseNode.String(), "  ")
-	out += "\n"
-	out += "bin tree:\n"
-	out += reindentString(def.MatchTree.String(), "  ")
-	out += "\n"
-	out += "match buckets:\n"
-	for i, bucketID := range def.MatchBuckets {
-		out += fmt.Sprintf("  %d: %d\n", i, bucketID)
-	}
-	out += fmt.Sprintf("num buckets: %d\n", def.NumBuckets)
-	out += fmt.Sprintf("num fetches: %d\n", def.NumSlots)
-	out += fmt.Sprintf("max depth: %d\n", def.MaxDepth)
 	return strings.TrimRight(out, "\n")
 }
