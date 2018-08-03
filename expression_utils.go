@@ -45,6 +45,10 @@ func fetchExprFieldRefsRecurse(expr Expression, loopVars []VariableID, fields []
 		fields = append(fields, expr)
 	case ValueExpr:
 	case RegexExpr:
+	case FuncExpr:
+		for _, subexpr := range expr.Params {
+			fields = fetchExprFieldRefsRecurse(subexpr, loopVars, fields)
+		}
 	case NotExpr:
 		fields = fetchExprFieldRefsRecurse(expr.SubExpr, loopVars, fields)
 	case AndExpr:

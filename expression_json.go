@@ -31,6 +31,26 @@ func parseJsonField(data []interface{}) (Expression, error) {
 	return out, nil
 }
 
+func parseJsonFunc(data []interface{}) (Expression, error) {
+	var out FuncExpr
+	pos := 1
+	if funcName, ok := data[pos].(string); ok {
+		out.FuncName = funcName
+		pos++
+	}
+	for ; pos < len(data); pos++ {
+		paramData := data[pos].([]interface{})
+		param, err := parseJsonSubexpr(paramData)
+		if err != nil {
+			return nil, err
+		}
+
+		out.Params = append(out.Params, param)
+	}
+
+	return out, nil
+}
+
 func parseJsonExists(data []interface{}) (Expression, error) {
 	subExprData, ok := data[1].([]interface{})
 	if !ok {
@@ -274,6 +294,8 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonValue(data)
 	case "field":
 		return parseJsonField(data)
+	case "func":
+		return parseJsonFunc(data)
 	case "not":
 		return parseJsonNot(data)
 	case "or":

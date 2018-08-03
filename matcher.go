@@ -105,6 +105,16 @@ func (m *Matcher) literalFromSlot(slot SlotID) FastVal {
 	return value
 }
 
+func (m *Matcher) resolveFunc(fn FuncRef, activeLit *FastVal) FastVal {
+	switch fn.FuncName {
+	case "mathRound":
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathRound(p1)
+	default:
+		panic("encountered unexpected function name")
+	}
+}
+
 func (m *Matcher) resolveParam(in interface{}, activeLit *FastVal) FastVal {
 	switch opVal := in.(type) {
 	case FastVal:
@@ -117,6 +127,8 @@ func (m *Matcher) resolveParam(in interface{}, activeLit *FastVal) FastVal {
 		return *activeLit
 	case SlotRef:
 		return m.literalFromSlot(opVal.Slot)
+	case FuncRef:
+		return m.resolveFunc(opVal, activeLit)
 	default:
 		panic(fmt.Sprintf("unexpected op value: %#v", in))
 	}

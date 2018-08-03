@@ -363,3 +363,17 @@ func TestMatcherCrossScopeLoop(t *testing.T) {
 		"5b47eb0950e9076fc0aecd52",
 	})
 }
+
+func TestMatcherEqualsFunc(t *testing.T) {
+	runJSONExprMatchTest(t, `
+	["equals",
+		["func",
+			"mathRound",
+			["field", "latitude"]
+		],
+	  ["value", 37]
+  ]
+	`, []string{
+		"5b47eb093771f06ced629663",
+	})
+}
