@@ -279,6 +279,15 @@ func (m *Matcher) matchLoop(token tokenType, tokenData []byte, loop *LoopNode) e
 		return nil
 	}
 
+	loopBucketIdx := int(loop.BucketIdx)
+
+	if m.buckets.IsResolved(loopBucketIdx) {
+		// If the bucket for this op is already resolved  in the binary tree,
+		// we don't need to perform the op and can just skip it.
+		m.skipValue(token)
+		return nil
+	}
+
 	// We need to keep track of the overall loop result value while the bin tree
 	// is being iterated on, reset, etc...
 	var loopState bool
@@ -291,8 +300,6 @@ func (m *Matcher) matchLoop(token tokenType, tokenData []byte, loop *LoopNode) e
 	} else {
 		panic("invalid loop mode")
 	}
-
-	loopBucketIdx := int(loop.BucketIdx)
 
 	// We need to mark the stall index on our binary tree so that
 	// resolution of a loop iteration does not propagate up the tree
