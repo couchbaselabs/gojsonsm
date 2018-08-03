@@ -292,8 +292,8 @@ func (t *Transformer) makeDataRef(expr Expression, context nodeRef) (DataRef, er
 		return SlotRef{slot}, nil
 	case ValueExpr:
 		val := NewFastVal(expr.Value)
-		if val.IsStringLike() {
-			val, _ = val.AsJsonString()
+		if val.IsString() {
+			val, _ = val.ToJsonString()
 		}
 		return val, nil
 	case RegexExpr:
