@@ -111,6 +111,20 @@ func (expr FieldExpr) String() string {
 	}
 }
 
+type FuncExpr struct {
+	FuncName string
+	Params   []Expression
+}
+
+func (expr FuncExpr) String() string {
+	rootStr := fmt.Sprintf("func:%s(", expr.FuncName)
+	for _, param := range expr.Params {
+		rootStr += param.String()
+	}
+	rootStr += ")"
+	return rootStr
+}
+
 type AnyInExpr struct {
 	VarId   VariableID
 	InExpr  Expression

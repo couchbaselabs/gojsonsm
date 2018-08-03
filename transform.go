@@ -279,13 +279,17 @@ func (t *Transformer) pickBaseNode(expr Expression) nodeRef {
 	}
 }
 
-func (t *Transformer) makeDataRef(expr Expression, context nodeRef) (DataRef, error) {
+func (t *Transformer) makeDataRefRecurse(expr Expression, context nodeRef, isRoot bool) (DataRef, error) {
 	switch expr := expr.(type) {
 	case FieldExpr:
 		resField := t.resolveRef(expr)
 		fieldNode := t.getExecNode(resField)
 		if context.node == fieldNode {
-			return nil, nil
+			if isRoot {
+				return nil, nil
+			} else {
+				return activeLitRef{}, nil
+			}
 		}
 
 		slot := t.storeExecNode(fieldNode)
@@ -302,9 +306,28 @@ func (t *Transformer) makeDataRef(expr Expression, context nodeRef) (DataRef, er
 			return nil, errors.New("failed to compile RegexExpr: " + err.Error())
 		}
 		return NewFastVal(regex), nil
+	case FuncExpr:
+		var params []DataRef
+
+		for _, paramExpr := range expr.Params {
+			param, err := t.makeDataRefRecurse(paramExpr, context, false)
+			if err != nil {
+				return nil, err
+			}
+			params = append(params, param)
+		}
+
+		return FuncRef{
+			FuncName: expr.FuncName,
+			Params:   params,
+		}, nil
 	}
 
 	return nil, errors.New("unsupported expression in parameter")
+}
+
+func (t *Transformer) makeDataRef(expr Expression, context nodeRef) (DataRef, error) {
+	return t.makeDataRefRecurse(expr, context, true)
 }
 
 func (t *Transformer) transformMergePiece(expr mergeExpr, i int) *ExecNode {

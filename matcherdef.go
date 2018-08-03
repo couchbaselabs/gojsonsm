@@ -44,6 +44,23 @@ func (ref SlotRef) String() string {
 	return fmt.Sprintf("$%d", ref.Slot)
 }
 
+type FuncRef struct {
+	FuncName string
+	Params   []DataRef
+}
+
+func (ref FuncRef) String() string {
+	value := fmt.Sprintf("func:%s(", ref.FuncName)
+	for paramIdx, param := range ref.Params {
+		if paramIdx != 0 {
+			value += ", "
+		}
+		value += param.String()
+	}
+	value += ")"
+	return value
+}
+
 type OpType int
 
 const (

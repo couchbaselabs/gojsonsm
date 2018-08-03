@@ -36,6 +36,10 @@ func (stats *ExpressionStats) scanOne(expr Expression, loopDepth int) error {
 		stats.NumFields++
 	case ValueExpr:
 		stats.NumValues++
+	case FuncExpr:
+		for _, subexpr := range expr.Params {
+			stats.scanOne(subexpr, loopDepth)
+		}
 	case AndExpr:
 		stats.NumAnds++
 		for _, subexpr := range expr {

@@ -110,18 +110,29 @@ func (val FastVal) IsBoolean() bool {
 }
 
 func (val FastVal) IsIntegral() bool {
-	return val.dataType == IntValue ||
-		val.dataType == UintValue
+	return val.IsInt() ||
+		val.IsUInt()
 }
 
-func (val FastVal) IsUnsigned() bool {
-	return val.dataType == UintValue
+func (val FastVal) IsInt() bool {
+	return val.dataType == IntValue ||
+		val.dataType == JsonIntValue
+}
+
+func (val FastVal) IsUInt() bool {
+	return val.dataType == IntValue ||
+		val.dataType == JsonIntValue
+}
+
+func (val FastVal) IsFloat() bool {
+	return val.dataType == FloatValue ||
+		val.dataType == JsonFloatValue
 }
 
 func (val FastVal) IsNumeric() bool {
-	return val.dataType == IntValue ||
-		val.dataType == UintValue ||
-		val.dataType == FloatValue
+	return val.IsInt() ||
+		val.IsUInt() ||
+		val.IsFloat()
 }
 
 func (val FastVal) IsString() bool {
@@ -412,6 +423,12 @@ func NewFastVal(val interface{}) FastVal {
 		return NewNullFastVal()
 	}
 
+	return FastVal{
+		dataType: InvalidValue,
+	}
+}
+
+func NewInvalidFastVal() FastVal {
 	return FastVal{
 		dataType: InvalidValue,
 	}
