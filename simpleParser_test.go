@@ -510,6 +510,66 @@ func TestContextParserMultiwordToken2(t *testing.T) {
 	assert.Nil(err)
 }
 
+func TestContextParserMultiwordToken2a(t *testing.T) {
+	assert := assert.New(t)
+	testString := "`name`.`first` IS NOT NULL && isActive == true"
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// `name`.`first`
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// IS NOT NULL
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("IS_NOT_NULL", token)
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// &&
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// isActive
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// ==
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// true
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeTrue))
+	assert.Nil(err)
+}
+
+func TestContextParserMultiwordToken3(t *testing.T) {
+	assert := assert.New(t)
+	testString := "`name`.`first` IS MISSING"
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// `name`.`first`
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// IS MISSING
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("IS_MISSING", token)
+	assert.Nil(err)
+}
+
 func TestContextParserMatch(t *testing.T) {
 	assert := assert.New(t)
 	testString := "name.first LIKE \"Ne[a|i]l\""
@@ -1197,6 +1257,164 @@ func TestParserExpressionOutputNotMatch(t *testing.T) {
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
 			"first": "Neil",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.False(match)
+}
+
+func TestParserExpressionOutputExists(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	["exists",
+		["field", "name", "first"]
+	]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first EXISTS"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Neil",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+}
+
+func TestParserExpressionOutputNotExists(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	["notexists",
+		["field", "name", "first"]
+	]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first IS MISSING"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"firstName": "Neil",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+}
+
+func TestParserExpressionOutputIsNull(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	  ["equals",
+	    ["field", "name", "first"],
+	    ["value", null]
+	]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first IS NULL"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": nil,
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+}
+
+func TestParserExpressionOutputIsNotNull(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	  ["notequals",
+	    ["field", "name", "first"],
+	    ["value", null]
+	]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "name.first IS NOT NULL"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": nil,
 		},
 	}
 	udMarsh, _ := json.Marshal(userData)

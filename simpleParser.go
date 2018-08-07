@@ -128,6 +128,7 @@ const (
 	chainOp   opTokenContext = iota
 	compareOp opTokenContext = iota
 	matchOp   opTokenContext = iota
+	noFieldOp opTokenContext = iota
 )
 
 type parserSubContext struct {
@@ -293,6 +294,7 @@ const (
 	TokenOperatorGreaterThan   = ">"
 	TokenOperatorGreaterThanEq = ">="
 	TokenOperatorLike          = "=~"
+	TokenOperatorExists        = "EXISTS"
 )
 
 // Other allowable operator tokens
@@ -307,6 +309,7 @@ const (
 var TokenOperatorNotLike []string = []string{"NOT", "LIKE"}
 var TokenOperatorIsNull []string = []string{"IS", "NULL"}
 var TokenOperatorIsNotNull []string = []string{"IS", "NOT", "NULL"}
+var TokenOperatorIsMissing []string = []string{"IS", "MISSING"}
 
 // In keeping with internals, flatten it and use it as comparison for actual op when outputting
 func flattenToken(token []string) string {
@@ -329,7 +332,21 @@ func replaceOpTokenIfNecessary(token string) string {
 
 func tokenIsOpType(token string) bool {
 	// Equal is both numeric and logical
-	return tokenIsChainOpType(token) || tokenIsEquivalentType(token) || tokenIsCompareOpType(token) || tokenIsLikeType(token)
+	return tokenIsChainOpType(token) || tokenIsEquivalentType(token) || tokenIsCompareOpType(token) || tokenIsLikeType(token) ||
+		tokenIsOpOnlyType(token)
+}
+
+// This ops do not have value follow-ups
+func tokenIsOpOnlyType(token string) bool {
+	return tokenIsExistenceType(token) || tokenIsNullType(token)
+}
+
+func tokenIsExistenceType(token string) bool {
+	return token == TokenOperatorExists || token == flattenToken(TokenOperatorIsMissing)
+}
+
+func tokenIsNullType(token string) bool {
+	return token == flattenToken(TokenOperatorIsNull) || token == flattenToken(TokenOperatorIsNotNull)
 }
 
 func tokenIsLikeType(token string) bool {
@@ -382,8 +399,14 @@ func (ctx *expressionParserContext) advanceToken() error {
 		// After the field mode, the next token *must* be an op
 		ctx.subCtx.currentMode = opMode
 	case opMode:
-		// After the op mode, the next mode should be value mode
-		ctx.subCtx.currentMode = valueMode
+		switch ctx.subCtx.opTokenContext {
+		// These ops do not have fields
+		case noFieldOp:
+			ctx.subCtx.currentMode = chainMode
+		default:
+			// After the op mode, the next mode should be value mode
+			ctx.subCtx.currentMode = valueMode
+		}
 	case valueMode:
 		if ctx.subCtx.oneLayerMode {
 			// One layer mode means that we should return as soon as this value is done so we can merge
@@ -448,10 +471,12 @@ func (ctx *expressionParserContext) checkAndMarkDetailedOpToken(token string) {
 		ctx.subCtx.opTokenContext = compareOp
 	} else if tokenIsLikeType(token) {
 		ctx.subCtx.opTokenContext = matchOp
+	} else if tokenIsOpOnlyType(token) {
+		ctx.subCtx.opTokenContext = noFieldOp
 	}
 }
 
-func (ctx *expressionParserContext) tokenIsPotentiallyOpType(token string) bool {
+func (ctx *expressionParserContext) checkIfTokenIsPotentiallyOpType(token string) bool {
 	if token == TokenOperatorNotLike[0] || token == TokenOperatorIsNull[0] || token == TokenOperatorIsNotNull[0] {
 		ctx.multiwordMapOnce.Do(func() {
 			ctx.multiwordHelperMap = make(map[string]*multiwordHelperPair)
@@ -463,6 +488,9 @@ func (ctx *expressionParserContext) tokenIsPotentiallyOpType(token string) bool 
 			}
 			ctx.multiwordHelperMap[flattenToken(TokenOperatorIsNotNull)] = &multiwordHelperPair{
 				actualMultiWords: TokenOperatorIsNotNull,
+			}
+			ctx.multiwordHelperMap[flattenToken(TokenOperatorIsMissing)] = &multiwordHelperPair{
+				actualMultiWords: TokenOperatorIsMissing,
 			}
 		})
 		for _, v := range ctx.multiwordHelperMap {
@@ -565,7 +593,7 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 	}
 	token := ctx.tokens[ctx.currentTokenIndex]
 
-	if ctx.tokenIsPotentiallyOpType(token) {
+	if ctx.checkIfTokenIsPotentiallyOpType(token) {
 		return ctx.handleMultiTokens()
 	} else if tokenIsOpType(token) {
 		token = replaceOpTokenIfNecessary(token)
@@ -1038,6 +1066,14 @@ func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expr
 		return ctx.outputLike(node, pos)
 	case flattenToken(TokenOperatorNotLike):
 		return ctx.outputNotLike(node, pos)
+	case TokenOperatorExists:
+		return ctx.outputExists(node, pos)
+	case flattenToken(TokenOperatorIsMissing):
+		return ctx.outputIsMissing(node, pos)
+	case flattenToken(TokenOperatorIsNull):
+		return ctx.outputIsNull(node, pos)
+	case flattenToken(TokenOperatorIsNotNull):
+		return ctx.outputIsNotNull(node, pos)
 	default:
 		return emptyExpression, fmt.Errorf("Error: Invalid op type: %s", nodeData)
 	}
@@ -1058,6 +1094,17 @@ func (ctx *expressionParserContext) getComparisonSubExprsNodes(node ParserTreeNo
 	}
 
 	return leftSubExpr, rightSubExpr, err
+}
+
+func (ctx *expressionParserContext) getSingleLeftSubExprsNodes(node ParserTreeNode, pos int) (Expression, error) {
+	leftNode, leftPos := ctx.getLeftOutputNode(pos)
+
+	leftSubExpr, err := ctx.outputNode(leftNode, leftPos)
+	if err != nil {
+		return nil, err
+	}
+
+	return leftSubExpr, err
 }
 
 func (ctx *expressionParserContext) outputEq(node ParserTreeNode, pos int) (Expression, error) {
@@ -1152,6 +1199,52 @@ func (ctx *expressionParserContext) outputNotLike(node ParserTreeNode, pos int) 
 
 	return NotExpr{
 		matchExpr,
+	}, nil
+}
+
+func (ctx *expressionParserContext) outputExists(node ParserTreeNode, pos int) (Expression, error) {
+	subExpr, err := ctx.getSingleLeftSubExprsNodes(node, pos)
+	if err != nil {
+		return nil, err
+	}
+
+	return ExistsExpr{
+		subExpr,
+	}, nil
+}
+
+func (ctx *expressionParserContext) outputIsMissing(node ParserTreeNode, pos int) (Expression, error) {
+	subExpr, err := ctx.getSingleLeftSubExprsNodes(node, pos)
+	if err != nil {
+		return nil, err
+	}
+
+	return NotExistsExpr{
+		subExpr,
+	}, nil
+}
+
+func (ctx *expressionParserContext) outputIsNull(node ParserTreeNode, pos int) (Expression, error) {
+	subExpr, err := ctx.getSingleLeftSubExprsNodes(node, pos)
+	if err != nil {
+		return nil, err
+	}
+
+	return EqualsExpr{
+		subExpr,
+		ValueExpr{nil},
+	}, nil
+}
+
+func (ctx *expressionParserContext) outputIsNotNull(node ParserTreeNode, pos int) (Expression, error) {
+	subExpr, err := ctx.getSingleLeftSubExprsNodes(node, pos)
+	if err != nil {
+		return nil, err
+	}
+
+	return NotEqualsExpr{
+		subExpr,
+		ValueExpr{nil},
 	}, nil
 }
 
