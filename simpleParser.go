@@ -30,7 +30,7 @@ import (
  *
  * Parenthesis are allowed, but must be surrounded by at least 1 white space
  * Currently, only the following operations are supported:
- * 		==/=, !=, ||/OR, &&/AND, >=, >, <=, <, LIKE/=~, NOT LIKE
+ * 		==/=, !=, ||/OR, &&/AND, >=, >, <=, <, LIKE/=~, NOT LIKE, EXISTS, IS MISSING, IS NULL, IS NOT NULL
  *
  * Usage example:
  * exprStr := "name.`first.name` == "Neil" && (age < 50 || isActive == true)"
@@ -480,22 +480,26 @@ func (ctx *expressionParserContext) handleMultiTokens() (string, ParseTokenType,
 outerLoop:
 	for i := 0; ctx.currentTokenIndex+i < len(ctx.tokens); i++ {
 		token := ctx.tokens[ctx.currentTokenIndex+i]
-		for fstr, pair := range ctx.multiwordHelperMap {
-			if !pair.valid {
-				continue
-			}
-			if i >= len(pair.actualMultiWords) || pair.actualMultiWords[i] != token {
-				pair.valid = false
-				numValids--
-			}
-			if numValids == 0 {
-				break outerLoop
-			} else if numValids == 1 && i == len(pair.actualMultiWords)-1 && pair.actualMultiWords[i] == token {
-				// Currently multi-tokens are different enough that this works. But it won't work if future tokens
-				// are similar enough, i.e. "NOT LIKE" and "NOT LIKE THIS"
-				ctx.currentTokenIndex += i
-				ctx.checkAndMarkDetailedOpToken(fstr)
-				return fstr, TokenTypeOperator, nil
+		retry := true
+		for retry {
+			retry = false
+			for fstr, pair := range ctx.multiwordHelperMap {
+				if !pair.valid {
+					continue
+				}
+				if i >= len(pair.actualMultiWords) || pair.actualMultiWords[i] != token {
+					pair.valid = false
+					numValids--
+					retry = true
+					break
+				}
+				if numValids == 0 {
+					break outerLoop
+				} else if numValids == 1 && i == len(pair.actualMultiWords)-1 && pair.actualMultiWords[i] == token {
+					ctx.currentTokenIndex += i
+					ctx.checkAndMarkDetailedOpToken(fstr)
+					return fstr, TokenTypeOperator, nil
+				}
 			}
 		}
 	}
