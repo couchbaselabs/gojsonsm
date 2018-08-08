@@ -83,7 +83,7 @@ func (m *Matcher) skipValue(token tokenType) error {
 	case tknArrayStart:
 		return m.leaveValue()
 	}
-	panic("unexpected value")
+	panic(fmt.Sprintf("unexpected value: %v", token))
 }
 
 func (m *Matcher) literalFromSlot(slot SlotID) FastVal {
@@ -228,7 +228,6 @@ func (m *Matcher) matchElems(token tokenType, tokenData []byte, elems map[string
 			return nil
 		}
 
-		// TODO(brett19): These byte-string conversion pieces are a bit wierd
 		var keyBytes []byte
 		if token == tknString {
 			keyBytes = keyLitParse.ParseString(tokenData)
@@ -476,9 +475,9 @@ func (m *Matcher) matchExec(token tokenType, tokenData []byte, node *ExecNode) e
 			// If we have no element handlers, we can just skip the whole thing...
 			m.skipValue(token)
 		} else {
-			err := m.matchElems(token, tokenData, node.Elems)
-			if err != nil {
-				return nil
+			err, shouldReturn := m.matchObjectOrArray(token, tokenData, node)
+			if shouldReturn {
+				return err
 			}
 
 			if m.buckets.IsResolved(0) {
@@ -487,8 +486,10 @@ func (m *Matcher) matchExec(token tokenType, tokenData []byte, node *ExecNode) e
 		}
 	} else if token == tknArrayStart {
 		if len(node.Loops) == 0 {
-			// If we have no loop handlers, we can just skip the whole thing...
-			m.skipValue(token)
+			err, shouldReturn := m.matchObjectOrArray(token, tokenData, node)
+			if shouldReturn {
+				return err
+			}
 		} else {
 			// Lets save where the beginning of the array is so that for each
 			// loop entry, we can easily revert back to the beginning of the
@@ -541,6 +542,107 @@ func (m *Matcher) matchExec(token tokenType, tokenData []byte, node *ExecNode) e
 	}
 
 	return nil
+}
+
+// Returns an error code, and a boolean to dictate whether or not for the caller to return immediately
+func (m *Matcher) matchObjectOrArray(token tokenType, tokenData []byte, node *ExecNode) (error, bool) {
+	var keyLitParse fastLitParser
+	var endToken tokenType
+	var arrayIndex int
+	var arrayMode bool
+
+	switch token {
+	case tknObjectStart:
+		endToken = tknObjectEnd
+	case tknArrayStart:
+		endToken = tknArrayEnd
+		arrayMode = true
+	default:
+		panic("Unexpected type input for function call matchObjectOrArray")
+	}
+
+	for i := 0; ; i++ {
+		// If this is not the first entry in the object, there should be a
+		// list delimiter ('c') that shows up in the input first.
+		if i != 0 {
+			token, _, err := m.tokens.Step()
+			if err != nil {
+				return err, true
+			}
+
+			switch token {
+			case endToken:
+				return nil, true
+			case tknListDelim:
+				arrayIndex++
+			// nothing
+			default:
+				panic(fmt.Sprintf("expected object field element delimiter, received: %v", token))
+			}
+		}
+
+		token, tokenData, err := m.tokens.Step()
+		if err != nil {
+			return err, true
+		}
+		if token == endToken {
+			return nil, true
+		}
+
+		// TODO(brett19): These byte-string conversion pieces are a bit wierd
+		var keyString string
+		var keyBytes []byte
+		switch token {
+		case tknString:
+			keyBytes = keyLitParse.ParseString(tokenData)
+		case tknEscString:
+			keyBytes = keyLitParse.ParseEscString(tokenData)
+		case tknArrayStart:
+			fallthrough
+		case tknObjectStart:
+			// In case of embedded objects or arrays
+			return m.matchExec(token, tokenData, node), false
+		default:
+			panic(fmt.Sprintf("expected literal, received: %v", token))
+		}
+
+		if arrayMode {
+			// Fake a key element by using the array index, and use the key as the actual value, tokenData
+			keyString = fmt.Sprintf("[%d]", arrayIndex)
+		} else {
+			token, tokenData, err = m.tokens.Step()
+			if err != nil {
+				return err, true
+			}
+
+			if token != tknObjectKeyDelim {
+				panic("expected object key delimiter")
+			}
+
+			token, tokenData, err = m.tokens.Step()
+			if err != nil {
+				return err, true
+			}
+			keyString = string(keyBytes)
+		}
+
+		if keyElem, ok := node.Elems[keyString]; ok {
+			// Run the execution node that applies to this particular
+			// key of the object.
+			m.matchExec(token, tokenData, keyElem)
+
+			// Check if running this keys execution has resolved the entirety
+			// of the expression, if so we can leave immediately.
+			if m.buckets.IsResolved(0) {
+				return nil, true
+			}
+		} else {
+			// If we don't have any parse requirements for this key in
+			// the object, we can just skip its value and continue
+			m.skipValue(token)
+		}
+	}
+	return nil, false
 }
 
 func (m *Matcher) Match(data []byte) (bool, error) {
