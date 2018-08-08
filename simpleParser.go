@@ -651,10 +651,10 @@ func checkAndParseField(token string, subTokens *[]string) error {
 			case fieldSeparator:
 				if !skipAppend {
 					*subTokens = append(*subTokens, string(token[beginPos:pos]))
-					beginPos = pos + 1
 				} else {
 					skipAppend = false
 				}
+				beginPos = pos + 1
 			case fieldLiteral:
 				mode = cfmBacktick
 				beginPos = pos + 1
@@ -707,8 +707,10 @@ func checkAndParseField(token string, subTokens *[]string) error {
 				if pos == len(token)-1 || (pos < len(token)-1 && string(token[pos+1]) == fieldNestedStart) {
 					skipAppend = true
 				}
-				// For now, bracket can be used only for array indexing
+			case fieldSeparator:
+				fallthrough
 			case fieldLiteral:
+				// For now, bracket can be used only for array indexing
 				return ErrorAllInts
 			}
 		}

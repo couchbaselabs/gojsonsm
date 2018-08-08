@@ -1298,6 +1298,50 @@ func TestParserExpressionOutputExists(t *testing.T) {
 			"first": "Neil",
 		},
 	}
+
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+
+}
+
+func TestParserExpressionOutputArrayEquals(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	["equals",
+		["field", "userIDs", "[1]"],
+		["value", "nelio2k"]
+	]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "userIDs[1] == \"nelio2k\""
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"userIDs": []string{
+			"brett19",
+			"nelio2k",
+		},
+	}
+
 	udMarsh, _ := json.Marshal(userData)
 	match, err := m.Match(udMarsh)
 	assert.Nil(err)
@@ -1735,4 +1779,45 @@ func TestContextParserNegMultiwordToken(t *testing.T) {
 	_, tokenType, err = ctx.getCurrentToken()
 	assert.NotNil(err)
 	ctx.advanceToken()
+}
+
+func TestParserExpressionOutputArrayEqualsMissing(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	["equals",
+		["field", "userIDs", "[1]"],
+		["value", "nelio2k"]
+	]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+	strExpr := "userIDs[1] == \"nelio2k\""
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"userIDsAlternate": []string{
+			"brett19",
+			"nelio2k",
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.False(match)
 }
