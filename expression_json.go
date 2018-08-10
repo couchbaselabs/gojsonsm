@@ -17,7 +17,7 @@ func parseJsonField(data []interface{}) (Expression, error) {
 	var out FieldExpr
 	pos := 1
 	if dataRoot, ok := data[pos].(float64); ok {
-		out.Root = int(dataRoot)
+		out.Root = VariableID(dataRoot)
 		pos++
 	}
 	for ; pos < len(data); pos++ {
@@ -29,6 +29,54 @@ func parseJsonField(data []interface{}) (Expression, error) {
 	}
 
 	return out, nil
+}
+
+func parseJsonFunc(data []interface{}) (Expression, error) {
+	var out FuncExpr
+	pos := 1
+	if funcName, ok := data[pos].(string); ok {
+		out.FuncName = funcName
+		pos++
+	}
+	for ; pos < len(data); pos++ {
+		paramData := data[pos].([]interface{})
+		param, err := parseJsonSubexpr(paramData)
+		if err != nil {
+			return nil, err
+		}
+
+		out.Params = append(out.Params, param)
+	}
+
+	return out, nil
+}
+
+func parseJsonExists(data []interface{}) (Expression, error) {
+	subExprData, ok := data[1].([]interface{})
+	if !ok {
+		return nil, errors.New("invalid exists expression subexpr format")
+	}
+
+	subExpr, err := parseJsonSubexpr(subExprData)
+	if err != nil {
+		return nil, err
+	}
+
+	return ExistsExpr{subExpr}, nil
+}
+
+func parseJsonNotExists(data []interface{}) (Expression, error) {
+	subExprData, ok := data[1].([]interface{})
+	if !ok {
+		return nil, errors.New("invalid notexists expression subexpr format")
+	}
+
+	subExpr, err := parseJsonSubexpr(subExprData)
+	if err != nil {
+		return nil, err
+	}
+
+	return NotExistsExpr{subExpr}, nil
 }
 
 func parseJsonComparison(data []interface{}) (Expression, Expression, error) {
@@ -163,7 +211,7 @@ func parseJsonAnd(data []interface{}) (Expression, error) {
 	return out, nil
 }
 
-func parseJsonLoop(data []interface{}) (int, Expression, Expression, error) {
+func parseJsonLoop(data []interface{}) (VariableID, Expression, Expression, error) {
 	varId, ok := data[1].(float64)
 	if !ok {
 		return 0, nil, nil, errors.New("invalid anyin expression variable format")
@@ -189,7 +237,7 @@ func parseJsonLoop(data []interface{}) (int, Expression, Expression, error) {
 		return 0, nil, nil, err
 	}
 
-	return int(varId), lhsExpr, subexprExpr, nil
+	return VariableID(varId), lhsExpr, subexprExpr, nil
 }
 
 func parseJsonAnyIn(data []interface{}) (Expression, error) {
@@ -246,6 +294,8 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonValue(data)
 	case "field":
 		return parseJsonField(data)
+	case "func":
+		return parseJsonFunc(data)
 	case "not":
 		return parseJsonNot(data)
 	case "or":
@@ -258,6 +308,10 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonEveryIn(data)
 	case "anyeveryin":
 		return parseJsonAnyEveryIn(data)
+	case "exists":
+		return parseJsonExists(data)
+	case "notexists":
+		return parseJsonNotExists(data)
 	case "equals":
 		return parseJsonEquals(data)
 	case "notequals":

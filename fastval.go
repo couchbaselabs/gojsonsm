@@ -64,10 +64,10 @@ func (val FastVal) String() string {
 	case StringValue:
 		return "(string)" + val.data.(string)
 	case BinStringValue:
-		tmpVal, _ := val.AsBinString()
+		tmpVal, _ := val.ToBinString()
 		return "(binString)" + fmt.Sprintf(`"%s"`, tmpVal.sliceData)
 	case JsonStringValue:
-		tmpVal, _ := val.AsBinString()
+		tmpVal, _ := val.ToBinString()
 		return "(jsonString)" + fmt.Sprintf(`"%s"`, tmpVal.sliceData)
 	case BinaryValue:
 		return "(bin)" + fmt.Sprintf(`"%s"`, val.sliceData)
@@ -110,21 +110,32 @@ func (val FastVal) IsBoolean() bool {
 }
 
 func (val FastVal) IsIntegral() bool {
-	return val.dataType == IntValue ||
-		val.dataType == UintValue
+	return val.IsInt() ||
+		val.IsUInt()
 }
 
-func (val FastVal) IsUnsigned() bool {
-	return val.dataType == UintValue
+func (val FastVal) IsInt() bool {
+	return val.dataType == IntValue ||
+		val.dataType == JsonIntValue
+}
+
+func (val FastVal) IsUInt() bool {
+	return val.dataType == IntValue ||
+		val.dataType == JsonIntValue
+}
+
+func (val FastVal) IsFloat() bool {
+	return val.dataType == FloatValue ||
+		val.dataType == JsonFloatValue
 }
 
 func (val FastVal) IsNumeric() bool {
-	return val.dataType == IntValue ||
-		val.dataType == UintValue ||
-		val.dataType == FloatValue
+	return val.IsInt() ||
+		val.IsUInt() ||
+		val.IsFloat()
 }
 
-func (val FastVal) IsStringLike() bool {
+func (val FastVal) IsString() bool {
 	return val.dataType == StringValue ||
 		val.dataType == BinStringValue ||
 		val.dataType == JsonStringValue
@@ -221,7 +232,15 @@ func (val FastVal) AsBoolean() bool {
 	return val.AsInt() != 0
 }
 
-func (val FastVal) AsBinString() (FastVal, error) {
+func (val FastVal) AsRegex() *regexp.Regexp {
+	switch val.dataType {
+	case RegexValue:
+		return val.data.(*regexp.Regexp)
+	}
+	return nil
+}
+
+func (val FastVal) ToBinString() (FastVal, error) {
 	switch val.dataType {
 	case StringValue:
 		return NewBinStringFastVal([]byte(val.data.(string))), nil
@@ -235,7 +254,7 @@ func (val FastVal) AsBinString() (FastVal, error) {
 	return val, errors.New("invalid type coercion")
 }
 
-func (val FastVal) AsJsonString() (FastVal, error) {
+func (val FastVal) ToJsonString() (FastVal, error) {
 	switch val.dataType {
 	case StringValue:
 		// TODO: Improve AsJsonString allocations
@@ -250,14 +269,6 @@ func (val FastVal) AsJsonString() (FastVal, error) {
 	}
 
 	return val, errors.New("invalid type coercion")
-}
-
-func (val FastVal) AsRegex() *regexp.Regexp {
-	switch val.dataType {
-	case RegexValue:
-		return val.data.(*regexp.Regexp)
-	}
-	return nil
 }
 
 func (val FastVal) compareInt(other FastVal) int {
@@ -315,8 +326,8 @@ func (val FastVal) compareBoolean(other FastVal) int {
 
 func (val FastVal) compareStrings(other FastVal) int {
 	// TODO: Improve string comparisons to avoid casting or converting
-	escVal, _ := val.AsJsonString()
-	escOval, _ := other.AsJsonString()
+	escVal, _ := val.ToJsonString()
+	escOval, _ := other.ToJsonString()
 	return strings.Compare(string(escVal.sliceData), string(escOval.sliceData))
 }
 
@@ -361,7 +372,7 @@ func (val FastVal) Equals(other FastVal) bool {
 }
 
 func (val FastVal) matchStrings(other FastVal) bool {
-	escVal, _ := val.AsJsonString()
+	escVal, _ := val.ToJsonString()
 	return other.AsRegex().Match(escVal.sliceData)
 }
 
@@ -412,6 +423,12 @@ func NewFastVal(val interface{}) FastVal {
 		return NewNullFastVal()
 	}
 
+	return FastVal{
+		dataType: InvalidValue,
+	}
+}
+
+func NewInvalidFastVal() FastVal {
 	return FastVal{
 		dataType: InvalidValue,
 	}

@@ -15,6 +15,8 @@ const (
 	nodeTypeOr
 	nodeTypeAnd
 	nodeTypeNot
+	nodeTypeNeor
+	nodeTypeLoop
 )
 
 func binTreeNodeTypeToString(nodeType BinTreeNodeType) string {
@@ -27,6 +29,10 @@ func binTreeNodeTypeToString(nodeType BinTreeNodeType) string {
 		return "and"
 	case nodeTypeNot:
 		return "not"
+	case nodeTypeNeor:
+		return "neor"
+	case nodeTypeLoop:
+		return "loop"
 	}
 	return "??ERROR??"
 }
@@ -36,7 +42,7 @@ func binTreeNodeTypeHasLeft(nodeType BinTreeNodeType) bool {
 }
 
 func binTreeNodeTypeHasRight(nodeType BinTreeNodeType) bool {
-	return nodeType != nodeTypeLeaf && nodeType != nodeTypeNot
+	return nodeType != nodeTypeLeaf && nodeType != nodeTypeNot && nodeType != nodeTypeLoop
 }
 
 type binTreePointers struct {
@@ -155,17 +161,26 @@ func (tree *binTree) validateItem(item int, parent int) (int, error) {
 	case nodeTypeAnd:
 	case nodeTypeOr:
 	case nodeTypeNot:
+	case nodeTypeNeor:
+	case nodeTypeLoop:
 	default:
 		// Invalid node type
 		return -1, errors.New("unexpected node type")
 	}
 
-	// Left must be set, and be inside the tree
-	if idata.Left <= 0 || idata.Left >= len(tree.data) {
-		return -1, errors.New("expected left to be defined, and inside the tree")
+	if !binTreeNodeTypeHasLeft(idata.NodeType) {
+		// Left must not be set
+		if idata.Left != 0 {
+			return -1, errors.New("expected left to be undefined")
+		}
+	} else {
+		// Left must be set, and be inside the tree
+		if idata.Left <= 0 || idata.Left >= len(tree.data) {
+			return -1, errors.New("expected left to be defined, and inside the tree")
+		}
 	}
 
-	if idata.NodeType == nodeTypeNot {
+	if !binTreeNodeTypeHasRight(idata.NodeType) {
 		// Right must not be set
 		if idata.Right != 0 {
 			return -1, errors.New("expected right to be undefined")
@@ -178,14 +193,17 @@ func (tree *binTree) validateItem(item int, parent int) (int, error) {
 	}
 
 	// Check the children
+	var err error
 	pos := item + 1
 
-	pos, err := tree.validateItem(pos, item)
-	if err != nil {
-		return -1, err
+	if binTreeNodeTypeHasLeft(idata.NodeType) {
+		pos, err = tree.validateItem(pos, item)
+		if err != nil {
+			return -1, err
+		}
 	}
 
-	if idata.NodeType != nodeTypeNot {
+	if binTreeNodeTypeHasRight(idata.NodeType) {
 		pos, err = tree.validateItem(pos, item)
 		if err != nil {
 			return -1, err
@@ -230,6 +248,29 @@ func (state *binTreeState) SetStallIndex(index int) int {
 	oldStallIndex := state.stallIndex
 	state.stallIndex = index
 	return oldStallIndex
+}
+
+// Resolve forces the tree to be fully resolved (including cases such as NOT)
+// by doing a depth-first resolution of all unresolved nodes with `false`.
+func (state *binTreeState) Resolve() {
+	// Skip resolving if the full tree is already resolved
+	if state.IsResolved(0) {
+		return
+	}
+
+	// Do depth-first resolution of the entire tree state
+	treeLength := len(state.data)
+	for i := treeLength - 1; i >= 0; i-- {
+		// If this bucket is not resolved, resolve it with false
+		if state.data[i] == binTreeStateUnknown {
+			state.MarkNode(i, false)
+		}
+
+		// Leave as soon as the root has been resolved
+		if state.data[0] != binTreeStateUnknown {
+			break
+		}
+	}
 }
 
 func (state *binTreeState) Reset() {
@@ -288,6 +329,15 @@ func (state *binTreeState) checkNode(index int) {
 			state.MarkNode(index, false)
 		}
 		return
+	} else if defNode.NodeType == nodeTypeNeor {
+		if state.data[defNode.Left] != binTreeStateUnknown && state.data[defNode.Right] != binTreeStateUnknown {
+			if state.data[defNode.Left] == binTreeStateTrue || state.data[defNode.Right] == binTreeStateTrue {
+				state.MarkNode(index, true)
+			} else {
+				state.MarkNode(index, false)
+			}
+		}
+		return
 	} else if defNode.NodeType == nodeTypeAnd {
 		if state.data[defNode.Left] == binTreeStateTrue && state.data[defNode.Right] == binTreeStateTrue {
 			state.MarkNode(index, true)
@@ -300,6 +350,13 @@ func (state *binTreeState) checkNode(index int) {
 			state.MarkNode(index, !true)
 		} else if state.data[defNode.Left] == binTreeStateFalse {
 			state.MarkNode(index, !false)
+		}
+		return
+	} else if defNode.NodeType == nodeTypeLoop {
+		if state.data[defNode.Left] == binTreeStateTrue {
+			state.MarkNode(index, true)
+		} else if state.data[defNode.Left] == binTreeStateFalse {
+			state.MarkNode(index, false)
 		}
 		return
 	}

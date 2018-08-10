@@ -3,21 +3,28 @@
 package gojsonsm
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 )
 
-type VariableID int
-type BucketID int
-
-type VarRef struct {
-	VarIdx VariableID
+type resolvedFieldRef struct {
+	Context *compileContext
+	Path    []string
 }
 
-func (ref VarRef) String() string {
-	return fmt.Sprintf("$%d", ref.VarIdx)
+func (ref resolvedFieldRef) String() string {
+	outStr := "$ROOT"
+	if ref.Context != nil {
+		outStr = fmt.Sprintf("%s", ref.Context)
+	}
+
+	if len(ref.Path) > 0 {
+		return outStr + "." + strings.Join(ref.Path, ".")
+	}
+
+	return outStr
 }
 
 type mergeExpr struct {
@@ -40,223 +47,30 @@ func (expr mergeExpr) String() string {
 	}
 }
 
-func (expr mergeExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	for _, subexpr := range expr.exprs {
-		out = rootSetAdd(out, subexpr.RootRefs()...)
-	}
-	return out
+type compileContext struct {
+	Depth int
+	Var   VariableID
+	Node  *ExecNode
+}
+
+func (ctx *compileContext) String() string {
+	return fmt.Sprintf("$%d@%d", ctx.Var, ctx.Depth)
 }
 
 type Transformer struct {
-	VarIdx          VariableID
-	BucketIdx       BucketID
-	RootExec        *ExecNode
-	RootTree        binTree
-	NodeMap         map[int]*ExecNode
-	ActiveExec      *ExecNode
+	SlotIdx   SlotID
+	BucketIdx BucketID
+	RootExec  *ExecNode
+	RootTree  binTree
+
+	ContextStack    []*compileContext
 	ActiveBucketIdx BucketID
-	MaxDepth        int
-	CurDepth        int
 }
 
-type OpType int
-
-const (
-	OpTypeEquals OpType = iota
-	OpTypeNotEquals
-	OpTypeLessThan
-	OpTypeLessEquals
-	OpTypeGreaterThan
-	OpTypeGreaterEquals
-	OpTypeIn
-	OpTypeMatches
-)
-
-func opTypeToString(value OpType) string {
-	switch value {
-	case OpTypeEquals:
-		return "eq"
-	case OpTypeNotEquals:
-		return "neq"
-	case OpTypeLessThan:
-		return "lt"
-	case OpTypeLessEquals:
-		return "le"
-	case OpTypeGreaterThan:
-		return "gt"
-	case OpTypeGreaterEquals:
-		return "gte"
-	case OpTypeIn:
-		return "in"
-	}
-
-	return "??unknown??"
-}
-
-type OpNode struct {
-	BucketIdx BucketID
-	Op        OpType
-	Rhs       interface{}
-}
-
-func (op OpNode) String() string {
-	var out string
-	out += fmt.Sprintf("[%d] %s", op.BucketIdx, opTypeToString(op.Op))
-
-	if op.Rhs != nil {
-		out += " " + fmt.Sprintf("%v", op.Rhs)
-	}
-
-	return out
-}
-
-type LoopType int
-
-const (
-	LoopTypeAny LoopType = iota
-	LoopTypeEvery
-	LoopTypeAnyEvery
-)
-
-func loopTypeToString(value LoopType) string {
-	switch value {
-	case LoopTypeAny:
-		return "any"
-	case LoopTypeEvery:
-		return "every"
-	case LoopTypeAnyEvery:
-		return "anyevery"
-	}
-
-	return "??unknown??"
-}
-
-type LoopNode struct {
-	BucketIdx BucketID
-	Mode      LoopType
-	Node      *ExecNode
-}
-
-type ExecNode struct {
-	StoreId VariableID
-	Ops     []*OpNode
-	Elems   map[string]*ExecNode
-	Loops   []LoopNode
-	After   map[VariableID]*ExecNode
-}
-
-type MatchDef struct {
-	ParseNode    *ExecNode
-	MatchTree    binTree
-	MatchBuckets []int
-	NumBuckets   int
-	NumFetches   int
-	MaxDepth     int
-}
-
-func (def MatchDef) String() string {
-	var out string
-	out += "match tree:\n"
-	out += reindentString(def.ParseNode.String(), "  ")
-	out += "\n"
-	out += "bin tree:\n"
-	out += reindentString(def.MatchTree.String(), "  ")
-	out += "\n"
-	out += "match buckets:\n"
-	for i, bucketID := range def.MatchBuckets {
-		out += fmt.Sprintf("  %d: %d\n", i, bucketID)
-	}
-	out += fmt.Sprintf("num buckets: %d\n", def.NumBuckets)
-	out += fmt.Sprintf("num fetches: %d\n", def.NumFetches)
-	out += fmt.Sprintf("max depth: %d\n", def.MaxDepth)
-	return strings.TrimRight(out, "\n")
-}
-
-func (node *ExecNode) makeStored(t *Transformer) VariableID {
-	if node.StoreId == 0 {
-		node.StoreId = t.newVariable()
-	}
-	return node.StoreId
-}
-
-func (node *ExecNode) makeAfterNode(varID VariableID) *ExecNode {
-	if node.After == nil {
-		node.After = make(map[VariableID]*ExecNode)
-	} else {
-		foundNode := node.After[varID]
-		if foundNode != nil {
-			return foundNode
-		}
-	}
-
-	newNode := &ExecNode{}
-	node.After[varID] = newNode
-	return newNode
-}
-
-func (node ExecNode) String() string {
-	var out string
-	if node.StoreId > 0 {
-		out += fmt.Sprintf(":store $%d\n", node.StoreId)
-	}
-
-	if len(node.Ops) > 0 {
-		out += fmt.Sprintf(":ops\n")
-		for _, op := range node.Ops {
-			out += reindentString(op.String(), "  ")
-			out += "\n"
-		}
-	}
-
-	// For debugging, lets sort the elements by name first
-	var ks []string
-	for k := range node.Elems {
-		ks = append(ks, k)
-	}
-	sort.Strings(ks)
-	if len(ks) > 0 {
-		out += fmt.Sprintf(":elems\n")
-
-		for _, k := range ks {
-			elem := node.Elems[k]
-			out += fmt.Sprintf("  `%s`:\n", k)
-			out += reindentString(elem.String(), "    ")
-			out += "\n"
-		}
-	}
-
-	if node.Loops != nil {
-		out += fmt.Sprintf(":loops\n")
-		for _, loop := range node.Loops {
-			out += fmt.Sprintf("[%d] :%s:\n", loop.BucketIdx, loopTypeToString(loop.Mode))
-
-			out += reindentString(loop.Node.String(), "  ")
-			out += "\n"
-		}
-	}
-
-	if node.After != nil {
-		out += fmt.Sprintf(":after:\n")
-		for varId, anode := range node.After {
-			out += fmt.Sprintf("  #with $%d:\n", varId)
-			out += reindentString(anode.String(), "    ")
-			out += "\n"
-		}
-	}
-
-	return strings.TrimRight(out, "\n")
-}
-
-func (t *Transformer) getExecNode(field FieldExpr) *ExecNode {
+func (t *Transformer) getExecNode(field resolvedFieldRef) *ExecNode {
 	node := t.RootExec
-
-	if field.Root != 0 {
-		node = t.NodeMap[field.Root]
-		if node == nil {
-			// TODO
-			panic("invalid field reference")
-		}
+	if field.Context != nil {
+		node = field.Context.Node
 	}
 
 	for _, entry := range field.Path {
@@ -274,6 +88,21 @@ func (t *Transformer) getExecNode(field FieldExpr) *ExecNode {
 	return node
 }
 
+func (t *Transformer) storeExecNode(node *ExecNode) SlotID {
+	if node.StoreId == 0 {
+		node.StoreId = t.newSlot()
+	}
+	return node.StoreId
+}
+
+func (t *Transformer) getAfterNode(node *ExecNode) *AfterNode {
+	if node.After == nil {
+		node.After = &AfterNode{}
+	}
+
+	return node.After
+}
+
 func (t *Transformer) newBucket() BucketID {
 	newBucketIdx := t.BucketIdx
 	t.BucketIdx++
@@ -288,10 +117,217 @@ func (t *Transformer) newBucket() BucketID {
 	return newBucketIdx
 }
 
-func (t *Transformer) newVariable() VariableID {
-	newVariableIdx := t.VarIdx
-	t.VarIdx++
-	return newVariableIdx + 1
+func (t *Transformer) newSlot() SlotID {
+	newSlotID := t.SlotIdx
+	t.SlotIdx++
+	return newSlotID + 1
+}
+
+func (t *Transformer) pushContext(varID VariableID, execNode *ExecNode) {
+	t.ContextStack = append(t.ContextStack, &compileContext{
+		Depth: len(t.ContextStack) + 1,
+		Var:   varID,
+		Node:  execNode,
+	})
+}
+
+func (t *Transformer) popContext(execNode *ExecNode) {
+	topContext := t.ContextStack[len(t.ContextStack)-1]
+	if topContext.Node != execNode {
+		panic("unexpected context in the stack")
+	}
+
+	t.ContextStack = t.ContextStack[0 : len(t.ContextStack)-1]
+}
+
+func (t *Transformer) gatherResolvedFieldRefs(expr Expression) []resolvedFieldRef {
+	fieldRefs := fetchExprFieldRefs(expr)
+
+	var resolvedFieldRefs []resolvedFieldRef
+	for _, fieldRef := range fieldRefs {
+		resolvedFieldRefs = append(resolvedFieldRefs, t.resolveRef(fieldRef))
+	}
+	return resolvedFieldRefs
+}
+
+func (t *Transformer) getContext(varID VariableID) *compileContext {
+	if varID == 0 {
+		return nil
+	}
+
+	for i := len(t.ContextStack) - 1; i >= 0; i++ {
+		if t.ContextStack[i].Var == varID {
+			return t.ContextStack[i]
+		}
+	}
+
+	panic("reference to out-of-context variable was encountered")
+}
+
+func (t *Transformer) resolveRef(fieldExpr FieldExpr) resolvedFieldRef {
+	return resolvedFieldRef{
+		Context: t.getContext(fieldExpr.Root),
+		Path:    fieldExpr.Path,
+	}
+}
+
+func (t *Transformer) findFieldRefsBestRoot(fieldRefs []resolvedFieldRef) (resolvedFieldRef, bool) {
+	var currentContext *compileContext
+	if len(t.ContextStack) > 0 {
+		currentContext = t.ContextStack[len(t.ContextStack)-1]
+	}
+
+	var contextFields []resolvedFieldRef
+	for _, fieldRef := range fieldRefs {
+		if fieldRef.Context == currentContext {
+			contextFields = append(contextFields, fieldRef)
+		}
+	}
+
+	if len(contextFields) == 0 {
+		return resolvedFieldRef{
+			Context: currentContext,
+			Path:    []string{},
+		}, false
+	}
+
+	// Pick the base path as being the longest of all the paths
+	basePath := contextFields[0].Path
+	for i := 1; i < len(contextFields); i++ {
+		if len(contextFields[i].Path) > len(basePath) {
+			basePath = contextFields[i].Path
+		}
+	}
+
+	var commonPath []string
+
+PathLoop:
+	for j := 0; j < len(basePath); j++ {
+		for i := 0; i < len(contextFields); i++ {
+			deepField := contextFields[i]
+			if len(deepField.Path) < j || deepField.Path[j] != basePath[j] {
+				break PathLoop
+			}
+		}
+		commonPath = append(commonPath, basePath[j])
+	}
+
+	needsAfter := len(commonPath) < len(basePath)
+
+	return resolvedFieldRef{
+		Context: currentContext,
+		Path:    commonPath,
+	}, needsAfter
+}
+
+type nodeRef struct {
+	node  *ExecNode
+	after *AfterNode
+}
+
+func (ref *nodeRef) AddOp(op OpNode) {
+	if ref.node != nil {
+		ref.node.Ops = append(ref.node.Ops, op)
+	} else if ref.after != nil {
+		ref.after.Ops = append(ref.after.Ops, op)
+	} else {
+		panic("cannot add an op to a null node reference")
+	}
+}
+
+func (ref *nodeRef) AddLoop(loop LoopNode) {
+	// TODO(brett19): This function currently validates that there
+	// is only 1 valid possible loop target used depending on which
+	// loop type its going into.  Someday we may implement function
+	// support which will invalidate this error check.  We do this
+	// here to ensure that the error is caught at compilation rather
+	// than at match time.
+
+	if ref.node != nil {
+		if loop.Target != nil {
+			panic("loops must always target the active state")
+		}
+
+		ref.node.Loops = append(ref.node.Loops, loop)
+	} else if ref.after != nil {
+		if _, ok := loop.Target.(SlotRef); !ok {
+			panic("after-loops must always target a slot")
+		}
+
+		ref.after.Loops = append(ref.after.Loops, loop)
+	} else {
+		panic("cannot add a loop to a null node reference")
+	}
+}
+
+func (t *Transformer) pickBaseNode(expr Expression) nodeRef {
+	fieldRefs := t.gatherResolvedFieldRefs(expr)
+	bestBase, needsAfter := t.findFieldRefsBestRoot(fieldRefs)
+	baseNode := t.getExecNode(bestBase)
+
+	if !needsAfter {
+		return nodeRef{
+			node:  baseNode,
+			after: nil,
+		}
+	}
+
+	afterNode := t.getAfterNode(baseNode)
+	return nodeRef{
+		node:  nil,
+		after: afterNode,
+	}
+}
+
+func (t *Transformer) makeDataRefRecurse(expr Expression, context nodeRef, isRoot bool) (DataRef, error) {
+	switch expr := expr.(type) {
+	case FieldExpr:
+		resField := t.resolveRef(expr)
+		fieldNode := t.getExecNode(resField)
+		if context.node == fieldNode {
+			if isRoot {
+				return nil, nil
+			} else {
+				return activeLitRef{}, nil
+			}
+		}
+
+		slot := t.storeExecNode(fieldNode)
+		return SlotRef{slot}, nil
+	case ValueExpr:
+		val := NewFastVal(expr.Value)
+		if val.IsString() {
+			val, _ = val.ToJsonString()
+		}
+		return val, nil
+	case RegexExpr:
+		regex, err := regexp.Compile(expr.Regex.(string))
+		if err != nil {
+			return nil, errors.New("failed to compile RegexExpr: " + err.Error())
+		}
+		return NewFastVal(regex), nil
+	case FuncExpr:
+		var params []DataRef
+
+		for _, paramExpr := range expr.Params {
+			param, err := t.makeDataRefRecurse(paramExpr, context, false)
+			if err != nil {
+				return nil, err
+			}
+			params = append(params, param)
+		}
+
+		return FuncRef{
+			FuncName: expr.FuncName,
+			Params:   params,
+		}, nil
+	}
+
+	return nil, errors.New("unsupported expression in parameter")
+}
+
+func (t *Transformer) makeDataRef(expr Expression, context nodeRef) (DataRef, error) {
+	return t.makeDataRefRecurse(expr, context, true)
 }
 
 func (t *Transformer) transformMergePiece(expr mergeExpr, i int) *ExecNode {
@@ -301,7 +337,7 @@ func (t *Transformer) transformMergePiece(expr mergeExpr, i int) *ExecNode {
 	}
 
 	baseBucketIdx := t.ActiveBucketIdx
-	t.RootTree.data[baseBucketIdx].NodeType = nodeTypeOr
+	t.RootTree.data[baseBucketIdx].NodeType = nodeTypeNeor
 
 	t.newBucket()
 	expr.bucketIDs[i] = t.ActiveBucketIdx
@@ -371,131 +407,127 @@ func (t *Transformer) transformAnd(expr AndExpr) *ExecNode {
 	return nil
 }
 
-func (t *Transformer) transformLoop(loopType LoopType, varID int, inExpr, subExpr Expression) *ExecNode {
-	if rhsField, ok := inExpr.(FieldExpr); ok {
-		newNode := &ExecNode{}
-		execNode := t.getExecNode(rhsField)
+func (t *Transformer) transformLoop(expr Expression, loopType LoopType, varID VariableID, inExpr, subExpr Expression) *ExecNode {
+	baseNode := t.pickBaseNode(expr)
 
-		// If the sub-expression of this loop access data that
-		// is not whole contained within the loop variables, we
-		// need to pull the whole loop out to the after block
-		// to guarentee that all data dependencies have been
-		// resolved and are available.
-		subRootRefs := subExpr.RootRefs()
-		if len(subRootRefs) > 0 {
-			storeId := execNode.makeStored(t)
-			execNode = t.ActiveExec.makeAfterNode(storeId)
-		}
+	newNode := &ExecNode{}
 
-		execNode.Loops = append(execNode.Loops, LoopNode{
-			t.ActiveBucketIdx,
-			loopType,
-			newNode,
-		})
-
-		oldActiveExec := t.ActiveExec
-		t.ActiveExec = newNode
-		t.CurDepth++
-
-		if t.CurDepth > t.MaxDepth {
-			t.MaxDepth = t.CurDepth
-		}
-
-		t.NodeMap[varID] = newNode
-
-		t.transformOne(subExpr)
-
-		t.CurDepth--
-		t.ActiveExec = oldActiveExec
-	} else {
-		panic("RHS of AnyIn must be a FieldExpr")
+	loopTarget, err := t.makeDataRef(inExpr, baseNode)
+	if err != nil {
+		panic(err)
 	}
+
+	baseBucketIdx := t.ActiveBucketIdx
+	t.RootTree.data[baseBucketIdx].NodeType = nodeTypeLoop
+	t.newBucket()
+	t.RootTree.data[baseBucketIdx].Left = int(t.ActiveBucketIdx)
+
+	baseNode.AddLoop(LoopNode{
+		t.ActiveBucketIdx,
+		loopType,
+		loopTarget,
+		newNode,
+	})
+
+	// Push this context to the stack
+	t.pushContext(varID, newNode)
+
+	// Transform the loops expression body
+	t.transformOne(subExpr)
+
+	// Pop from the context stack
+	t.popContext(newNode)
 
 	return nil
 }
 
 func (t *Transformer) transformAnyIn(expr AnyInExpr) *ExecNode {
-	return t.transformLoop(LoopTypeAny, expr.VarId, expr.InExpr, expr.SubExpr)
+	return t.transformLoop(expr, LoopTypeAny, expr.VarId, expr.InExpr, expr.SubExpr)
 }
 
 func (t *Transformer) transformEveryIn(expr EveryInExpr) *ExecNode {
-	return t.transformLoop(LoopTypeEvery, expr.VarId, expr.InExpr, expr.SubExpr)
+	return t.transformLoop(expr, LoopTypeEvery, expr.VarId, expr.InExpr, expr.SubExpr)
 }
 
 func (t *Transformer) transformAnyEveryIn(expr AnyEveryInExpr) *ExecNode {
-	return t.transformLoop(LoopTypeAnyEvery, expr.VarId, expr.InExpr, expr.SubExpr)
+	return t.transformLoop(expr, LoopTypeAnyEvery, expr.VarId, expr.InExpr, expr.SubExpr)
 }
 
-func (t *Transformer) makeRhsParam(expr Expression) interface{} {
-	if rhsField, ok := expr.(FieldExpr); ok {
-		rhsNode := t.getExecNode(rhsField)
-		rhsStoreId := rhsNode.makeStored(t)
-		return VarRef{rhsStoreId}
-	} else if rhsValue, ok := expr.(ValueExpr); ok {
-		val := NewFastVal(rhsValue.Value)
-		if val.IsStringLike() {
-			val, _ = val.AsJsonString()
-		}
-		return val
-	} else if rhsValue, ok := expr.(RegexExpr); ok {
-		regex, err := regexp.Compile(rhsValue.Regex.(string))
-		if err != nil {
-			return "??ERROR??"
-		}
-		return NewFastVal(regex)
-	} else {
-		return "??ERROR??"
+func (t *Transformer) transformExists(expr ExistsExpr) *ExecNode {
+	baseNode := t.pickBaseNode(expr)
+
+	lhsDataRef, err := t.makeDataRef(expr.SubExpr, baseNode)
+	if err != nil {
+		panic(err)
 	}
+
+	baseNode.AddOp(OpNode{
+		t.ActiveBucketIdx,
+		OpTypeExists,
+		lhsDataRef,
+		nil,
+	})
+
+	return nil
 }
 
-func (t *Transformer) transformComparison(op OpType, lhs, rhs Expression) *ExecNode {
-	if lhsField, ok := lhs.(FieldExpr); ok {
-		execNode := t.getExecNode(lhsField)
+func (t *Transformer) transformNotExists(expr NotExistsExpr) *ExecNode {
+	return t.transformOne(NotExpr{
+		ExistsExpr{
+			expr.SubExpr,
+		},
+	})
+}
 
-		lhsRootRefs := rhs.RootRefs()
-		if len(lhsRootRefs) > 0 {
-			storeId := execNode.makeStored(t)
-			execNode = t.ActiveExec.makeAfterNode(storeId)
-		}
+func (t *Transformer) transformComparison(expr Expression, op OpType, lhs, rhs Expression) *ExecNode {
+	baseNode := t.pickBaseNode(expr)
 
-		execNode.Ops = append(execNode.Ops, &OpNode{
-			t.ActiveBucketIdx,
-			op,
-			t.makeRhsParam(rhs),
-		})
-	} else {
-		panic("LHS of a comparison expression must be a FieldExpr")
+	lhsRef, err := t.makeDataRef(lhs, baseNode)
+	if err != nil {
+		panic(err)
 	}
+
+	rhsRef, err := t.makeDataRef(rhs, baseNode)
+	if err != nil {
+		panic(err)
+	}
+
+	baseNode.AddOp(OpNode{
+		t.ActiveBucketIdx,
+		op,
+		lhsRef,
+		rhsRef,
+	})
 
 	return nil
 }
 
 func (t *Transformer) transformEquals(expr EqualsExpr) *ExecNode {
-	return t.transformComparison(OpTypeEquals, expr.Lhs, expr.Rhs)
+	return t.transformComparison(expr, OpTypeEquals, expr.Lhs, expr.Rhs)
 }
 
 func (t *Transformer) transformNotEquals(expr NotEqualsExpr) *ExecNode {
-	return t.transformComparison(OpTypeNotEquals, expr.Lhs, expr.Rhs)
+	return t.transformComparison(expr, OpTypeNotEquals, expr.Lhs, expr.Rhs)
 }
 
 func (t *Transformer) transformLessThan(expr LessThanExpr) *ExecNode {
-	return t.transformComparison(OpTypeLessThan, expr.Lhs, expr.Rhs)
+	return t.transformComparison(expr, OpTypeLessThan, expr.Lhs, expr.Rhs)
 }
 
 func (t *Transformer) transformLessEquals(expr LessEqualsExpr) *ExecNode {
-	return t.transformComparison(OpTypeLessEquals, expr.Lhs, expr.Rhs)
+	return t.transformComparison(expr, OpTypeLessEquals, expr.Lhs, expr.Rhs)
 }
 
 func (t *Transformer) transformGreaterThan(expr GreaterThanExpr) *ExecNode {
-	return t.transformComparison(OpTypeGreaterThan, expr.Lhs, expr.Rhs)
+	return t.transformComparison(expr, OpTypeGreaterThan, expr.Lhs, expr.Rhs)
 }
 
 func (t *Transformer) transformGreaterEquals(expr GreaterEqualsExpr) *ExecNode {
-	return t.transformComparison(OpTypeGreaterEquals, expr.Lhs, expr.Rhs)
+	return t.transformComparison(expr, OpTypeGreaterEquals, expr.Lhs, expr.Rhs)
 }
 
 func (t *Transformer) transformLike(expr LikeExpr) *ExecNode {
-	return t.transformComparison(OpTypeMatches, expr.Lhs, expr.Rhs)
+	return t.transformComparison(expr, OpTypeMatches, expr.Lhs, expr.Rhs)
 }
 
 func (t *Transformer) transformOne(expr Expression) *ExecNode {
@@ -514,6 +546,10 @@ func (t *Transformer) transformOne(expr Expression) *ExecNode {
 		return t.transformOr(expr)
 	case AndExpr:
 		return t.transformAnd(expr)
+	case ExistsExpr:
+		return t.transformExists(expr)
+	case NotExistsExpr:
+		return t.transformNotExists(expr)
 	case EqualsExpr:
 		return t.transformEquals(expr)
 	case NotEqualsExpr:
@@ -537,11 +573,7 @@ var AlwaysFalseIdent = -2
 
 func (t *Transformer) Transform(exprs []Expression) *MatchDef {
 	t.RootExec = &ExecNode{}
-	t.ActiveExec = t.RootExec
-	t.NodeMap = make(map[int]*ExecNode)
-
-	t.CurDepth = 1
-	t.MaxDepth = t.CurDepth
+	t.ContextStack = nil
 	t.BucketIdx = 1
 	t.ActiveBucketIdx = 0
 	t.RootTree = binTree{[]binTreeNode{
@@ -586,8 +618,7 @@ func (t *Transformer) Transform(exprs []Expression) *MatchDef {
 		t.RootExec = nil
 		t.RootTree = binTree{}
 		t.BucketIdx = 0
-		t.VarIdx = 0
-		t.MaxDepth = 0
+		t.SlotIdx = 0
 	}
 
 	if t.RootExec != nil {
@@ -606,7 +637,6 @@ func (t *Transformer) Transform(exprs []Expression) *MatchDef {
 		MatchTree:    t.RootTree,
 		MatchBuckets: exprBucketIDs,
 		NumBuckets:   int(t.BucketIdx),
-		NumFetches:   int(t.VarIdx),
-		MaxDepth:     t.MaxDepth,
+		NumSlots:     int(t.SlotIdx),
 	}
 }

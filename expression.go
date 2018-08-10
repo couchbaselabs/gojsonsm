@@ -7,44 +7,18 @@ import (
 	"strings"
 )
 
-func fieldExprCompare(lhs FieldExpr, rhs FieldExpr) bool {
-	if rhs.Root != lhs.Root {
-		return false
+type VariableID int
+
+func (id VariableID) String() string {
+	if id == 0 {
+		return "$doc"
 	}
 
-	if len(rhs.Path) != len(lhs.Path) {
-		return false
-	}
-
-	for i, path := range rhs.Path {
-		if lhs.Path[i] != path {
-			return false
-		}
-	}
-
-	return true
-}
-
-func rootSetAddOne(set []FieldExpr, item FieldExpr) []FieldExpr {
-	for _, oitem := range set {
-		if fieldExprCompare(oitem, item) {
-			return set
-		}
-	}
-	return append(set, item)
-}
-
-func rootSetAdd(set []FieldExpr, items ...FieldExpr) []FieldExpr {
-	out := set
-	for _, item := range items {
-		out = rootSetAddOne(out, item)
-	}
-	return out
+	return fmt.Sprintf("$%d", id)
 }
 
 type Expression interface {
 	String() string
-	RootRefs() []FieldExpr
 }
 
 type TrueExpr struct {
@@ -54,19 +28,11 @@ func (expr TrueExpr) String() string {
 	return "True"
 }
 
-func (expr TrueExpr) RootRefs() []FieldExpr {
-	return nil
-}
-
 type FalseExpr struct {
 }
 
 func (expr FalseExpr) String() string {
 	return "False"
-}
-
-func (expr FalseExpr) RootRefs() []FieldExpr {
-	return nil
 }
 
 type ValueExpr struct {
@@ -77,10 +43,6 @@ func (expr ValueExpr) String() string {
 	return fmt.Sprintf("%v", expr.Value)
 }
 
-func (expr ValueExpr) RootRefs() []FieldExpr {
-	return nil
-}
-
 type RegexExpr struct {
 	Regex interface{}
 }
@@ -89,20 +51,12 @@ func (expr RegexExpr) String() string {
 	return fmt.Sprintf("/%v/", expr.Regex)
 }
 
-func (expr RegexExpr) RootRefs() []FieldExpr {
-	return nil
-}
-
 type NotExpr struct {
 	SubExpr Expression
 }
 
 func (expr NotExpr) String() string {
 	return "NOT " + expr.SubExpr.String()
-}
-
-func (expr NotExpr) RootRefs() []FieldExpr {
-	return expr.SubExpr.RootRefs()
 }
 
 type AndExpr []Expression
@@ -122,14 +76,6 @@ func (expr AndExpr) String() string {
 	}
 }
 
-func (expr AndExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	for _, subexpr := range expr {
-		out = rootSetAdd(out, subexpr.RootRefs()...)
-	}
-	return out
-}
-
 type OrExpr []Expression
 
 func (expr OrExpr) String() string {
@@ -147,16 +93,8 @@ func (expr OrExpr) String() string {
 	}
 }
 
-func (expr OrExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	for _, subexpr := range expr {
-		out = rootSetAdd(out, subexpr.RootRefs()...)
-	}
-	return out
-}
-
 type FieldExpr struct {
-	Root int
+	Root VariableID
 	Path []string
 }
 
@@ -173,15 +111,22 @@ func (expr FieldExpr) String() string {
 	}
 }
 
-func (expr FieldExpr) RootRefs() []FieldExpr {
-	if expr.Root != 0 {
-		return nil
+type FuncExpr struct {
+	FuncName string
+	Params   []Expression
+}
+
+func (expr FuncExpr) String() string {
+	rootStr := fmt.Sprintf("func:%s(", expr.FuncName)
+	for _, param := range expr.Params {
+		rootStr += param.String()
 	}
-	return []FieldExpr{expr}
+	rootStr += ")"
+	return rootStr
 }
 
 type AnyInExpr struct {
-	VarId   int
+	VarId   VariableID
 	InExpr  Expression
 	SubExpr Expression
 }
@@ -191,15 +136,8 @@ func (expr AnyInExpr) String() string {
 	return fmt.Sprintf("any $%d in %s\n%s\nend", expr.VarId, expr.InExpr, exprStr)
 }
 
-func (expr AnyInExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	out = rootSetAdd(out, expr.InExpr.RootRefs()...)
-	out = rootSetAdd(out, expr.SubExpr.RootRefs()...)
-	return out
-}
-
 type EveryInExpr struct {
-	VarId   int
+	VarId   VariableID
 	InExpr  Expression
 	SubExpr Expression
 }
@@ -209,15 +147,8 @@ func (expr EveryInExpr) String() string {
 	return fmt.Sprintf("every $%d in %s\n%s\nend", expr.VarId, expr.InExpr, exprStr)
 }
 
-func (expr EveryInExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	out = rootSetAdd(out, expr.InExpr.RootRefs()...)
-	out = rootSetAdd(out, expr.SubExpr.RootRefs()...)
-	return out
-}
-
 type AnyEveryInExpr struct {
-	VarId   int
+	VarId   VariableID
 	InExpr  Expression
 	SubExpr Expression
 }
@@ -227,11 +158,20 @@ func (expr AnyEveryInExpr) String() string {
 	return fmt.Sprintf("any and every $%d in %s\n%s\nend", expr.VarId, expr.InExpr, exprStr)
 }
 
-func (expr AnyEveryInExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	out = rootSetAdd(out, expr.InExpr.RootRefs()...)
-	out = rootSetAdd(out, expr.SubExpr.RootRefs()...)
-	return out
+type ExistsExpr struct {
+	SubExpr Expression
+}
+
+func (expr ExistsExpr) String() string {
+	return fmt.Sprintf("%s EXISTS", expr.SubExpr)
+}
+
+type NotExistsExpr struct {
+	SubExpr Expression
+}
+
+func (expr NotExistsExpr) String() string {
+	return fmt.Sprintf("%s IS MISSING", expr.SubExpr)
 }
 
 type EqualsExpr struct {
@@ -243,13 +183,6 @@ func (expr EqualsExpr) String() string {
 	return fmt.Sprintf("%s = %s", expr.Lhs, expr.Rhs)
 }
 
-func (expr EqualsExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
-	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
-	return out
-}
-
 type NotEqualsExpr struct {
 	Lhs Expression
 	Rhs Expression
@@ -257,13 +190,6 @@ type NotEqualsExpr struct {
 
 func (expr NotEqualsExpr) String() string {
 	return fmt.Sprintf("%s != %s", expr.Lhs, expr.Rhs)
-}
-
-func (expr NotEqualsExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
-	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
-	return out
 }
 
 type LessThanExpr struct {
@@ -275,13 +201,6 @@ func (expr LessThanExpr) String() string {
 	return fmt.Sprintf("%s < %s", expr.Lhs, expr.Rhs)
 }
 
-func (expr LessThanExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
-	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
-	return out
-}
-
 type LessEqualsExpr struct {
 	Lhs Expression
 	Rhs Expression
@@ -289,13 +208,6 @@ type LessEqualsExpr struct {
 
 func (expr LessEqualsExpr) String() string {
 	return fmt.Sprintf("%s <= %s", expr.Lhs, expr.Rhs)
-}
-
-func (expr LessEqualsExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
-	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
-	return out
 }
 
 type GreaterThanExpr struct {
@@ -307,13 +219,6 @@ func (expr GreaterThanExpr) String() string {
 	return fmt.Sprintf("%s > %s", expr.Lhs, expr.Rhs)
 }
 
-func (expr GreaterThanExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
-	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
-	return out
-}
-
 type GreaterEqualsExpr struct {
 	Lhs Expression
 	Rhs Expression
@@ -323,13 +228,6 @@ func (expr GreaterEqualsExpr) String() string {
 	return fmt.Sprintf("%s >= %s", expr.Lhs, expr.Rhs)
 }
 
-func (expr GreaterEqualsExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
-	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
-	return out
-}
-
 type LikeExpr struct {
 	Lhs Expression
 	Rhs Expression
@@ -337,11 +235,4 @@ type LikeExpr struct {
 
 func (expr LikeExpr) String() string {
 	return fmt.Sprintf("%s =~ %s", expr.Lhs, expr.Rhs)
-}
-
-func (expr LikeExpr) RootRefs() []FieldExpr {
-	var out []FieldExpr
-	out = rootSetAdd(out, expr.Lhs.RootRefs()...)
-	out = rootSetAdd(out, expr.Rhs.RootRefs()...)
-	return out
 }
