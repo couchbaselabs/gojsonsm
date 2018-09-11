@@ -1010,9 +1010,9 @@ func (ctx *expressionParserContext) outputNode(node ParserTreeNode, pos int) (Ex
 	case TokenTypeField:
 		return ctx.outputField(node, pos)
 	case TokenTypeTrue:
-		fallthrough
+		return ctx.outputTrue()
 	case TokenTypeFalse:
-		fallthrough
+		return ctx.outputFalse()
 	case TokenTypeValue:
 		return ctx.outputValue(node)
 	case TokenTypeRegex:
@@ -1020,6 +1020,14 @@ func (ctx *expressionParserContext) outputNode(node ParserTreeNode, pos int) (Ex
 	default:
 		return emptyExpression, fmt.Errorf("Error: Invalid Node token type: %v", node.tokenType.String())
 	}
+}
+
+func (ctx *expressionParserContext) outputTrue() (Expression, error) {
+	return ValueExpr{true}, nil
+}
+
+func (ctx *expressionParserContext) outputFalse() (Expression, error) {
+	return ValueExpr{false}, nil
 }
 
 func (ctx *expressionParserContext) outputValue(node ParserTreeNode) (Expression, error) {

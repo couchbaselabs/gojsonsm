@@ -1467,6 +1467,49 @@ func TestParserExpressionOutputIsNotNull(t *testing.T) {
 	assert.False(match)
 }
 
+func TestParserExpressionOutputIsTrue(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "name == true"
+
+	matchJson := []byte(`
+	  ["equals",
+	    ["field", "name"],
+	    ["value", true]
+	]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{jsonExpr})
+	matchDef2 := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+	assert.NotNil(matchDef2)
+
+	m := NewMatcher(matchDef)
+	m2 := NewMatcher(matchDef2)
+	userData := map[string]interface{}{
+		"name": true,
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+	match2, err := m2.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match2)
+}
+
 // NEGATIVE test cases
 func TestSimpleParserParenMismatch(t *testing.T) {
 	assert := assert.New(t)
