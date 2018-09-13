@@ -494,6 +494,31 @@ func TestContextParserMultiwordToken(t *testing.T) {
 
 func TestContextParserMultiwordToken2(t *testing.T) {
 	assert := assert.New(t)
+	testString := "`[XDCRInternal]`.`Version` > 1.0"
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// `[XDCRInternal]`.`Version`
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// >
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal(">", token)
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// 1.0
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
+	assert.Nil(err)
+	assert.Equal("1.0", token)
+}
+
+func TestContextParserMultiwordToken2(t *testing.T) {
+	assert := assert.New(t)
 	testString := "name.first IS NOT NULL"
 	ctx, err := NewExpressionParserCtx(testString)
 
@@ -1508,6 +1533,36 @@ func TestParserExpressionOutputIsTrue(t *testing.T) {
 	match2, err := m2.Match(udMarsh)
 	assert.Nil(err)
 	assert.True(match2)
+}
+
+func TestParserExpressionOutputXDCRInternalObj(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "`[XDCRInternal]`.Version > 2.0"
+
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"[XDCRInternal]": map[string]interface{}{
+			"Version": 3.0,
+		},
+	}
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
 }
 
 // NEGATIVE test cases
