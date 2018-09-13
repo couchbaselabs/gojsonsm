@@ -59,7 +59,7 @@ var ErrorEmptyToken error = fmt.Errorf("Token cannot be empty")
 var valueRegex *regexp.Regexp = regexp.MustCompile(`^\".*\"$`)
 
 // Or Values can be int or floats by themselves (w/o alpha char)
-var valueNumRegex *regexp.Regexp = regexp.MustCompile(`^(-?)(0|([1-9][0-9]*))(\\.[0-9]+)?$`)
+var valueNumRegex *regexp.Regexp = regexp.MustCompile(`^(-?)(0|([1-9][0-9]*))(\.[0-9]+)?$`)
 
 // Field path can be integers
 var fieldTokenInt *regexp.Regexp = regexp.MustCompile(`[0-9]`)
