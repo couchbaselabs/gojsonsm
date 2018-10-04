@@ -170,6 +170,9 @@ func (val FastVal) AsInt() int64 {
 	case JsonFloatValue:
 		parsedVal, _ := strconv.ParseFloat(string(val.sliceData), 64)
 		return int64(parsedVal)
+	case JsonStringValue:
+		parsedVal, _ := strconv.ParseFloat(string(val.sliceData), 64)
+		return int64(parsedVal)
 	case TrueValue:
 		return 1
 	case FalseValue:
@@ -193,6 +196,9 @@ func (val FastVal) AsUint() uint64 {
 		parsedVal, _ := strconv.ParseUint(string(val.sliceData), 10, 64)
 		return parsedVal
 	case JsonFloatValue:
+		parsedVal, _ := strconv.ParseFloat(string(val.sliceData), 64)
+		return uint64(parsedVal)
+	case JsonStringValue:
 		parsedVal, _ := strconv.ParseFloat(string(val.sliceData), 64)
 		return uint64(parsedVal)
 	case TrueValue:

@@ -517,7 +517,7 @@ func TestContextParserMultiwordToken2(t *testing.T) {
 	assert.Equal("1.0", token)
 }
 
-func TestContextParserMultiwordToken2(t *testing.T) {
+func TestContextParserMultiwordToken2b(t *testing.T) {
 	assert := assert.New(t)
 	testString := "name.first IS NOT NULL"
 	ctx, err := NewExpressionParserCtx(testString)
