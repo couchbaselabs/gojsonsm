@@ -572,7 +572,7 @@ func (m *Matcher) matchObjectOrArray(token tokenType, tokenData []byte, node *Ex
 
 			switch token {
 			case endToken:
-				return nil, true
+				return nil, m.buckets.IsResolved(0)
 			case tknListDelim:
 				arrayIndex++
 			// nothing
@@ -586,7 +586,7 @@ func (m *Matcher) matchObjectOrArray(token tokenType, tokenData []byte, node *Ex
 			return err, true
 		}
 		if token == endToken {
-			return nil, true
+			return nil, m.buckets.IsResolved(0)
 		}
 
 		// TODO(brett19): These byte-string conversion pieces are a bit wierd
@@ -601,7 +601,7 @@ func (m *Matcher) matchObjectOrArray(token tokenType, tokenData []byte, node *Ex
 			fallthrough
 		case tknObjectStart:
 			// In case of embedded objects or arrays
-			return m.matchExec(token, tokenData, node), false
+			return m.matchExec(token, tokenData, node), m.buckets.IsResolved(0)
 		default:
 			panic(fmt.Sprintf("expected literal, received: %v", token))
 		}
@@ -642,7 +642,7 @@ func (m *Matcher) matchObjectOrArray(token tokenType, tokenData []byte, node *Ex
 			m.skipValue(token)
 		}
 	}
-	return nil, false
+	return nil, m.buckets.IsResolved(0)
 }
 
 func (m *Matcher) Match(data []byte) (bool, error) {
