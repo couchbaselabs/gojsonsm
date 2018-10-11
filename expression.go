@@ -51,6 +51,14 @@ func (expr RegexExpr) String() string {
 	return fmt.Sprintf("/%v/", expr.Regex)
 }
 
+type PcreExpr struct {
+	Pcre interface{}
+}
+
+func (expr PcreExpr) String() string {
+	return fmt.Sprintf("/%v/", expr.Pcre)
+}
+
 type NotExpr struct {
 	SubExpr Expression
 }
