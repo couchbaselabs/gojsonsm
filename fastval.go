@@ -28,6 +28,7 @@ const (
 	BinStringValue
 	JsonStringValue
 	RegexValue
+	PcreValue
 	BinaryValue
 	NullValue
 	TrueValue
@@ -232,10 +233,12 @@ func (val FastVal) AsBoolean() bool {
 	return val.AsInt() != 0
 }
 
-func (val FastVal) AsRegex() *regexp.Regexp {
+func (val FastVal) AsRegex() FastValRegexIface {
 	switch val.dataType {
 	case RegexValue:
 		return val.data.(*regexp.Regexp)
+	case PcreValue:
+		return val.data.(PcreWrapperInterface)
 	}
 	return nil
 }
@@ -419,6 +422,8 @@ func NewFastVal(val interface{}) FastVal {
 		return NewBinaryFastVal(val)
 	case *regexp.Regexp:
 		return NewRegexpFastVal(val)
+	case PcreWrapperInterface:
+		return NewPcreFastVal(val)
 	case nil:
 		return NewNullFastVal()
 	}
@@ -537,4 +542,16 @@ func NewRegexpFastVal(value *regexp.Regexp) FastVal {
 		data:     value,
 	}
 	return val
+}
+
+func NewPcreFastVal(value PcreWrapperInterface) FastVal {
+	val := FastVal{
+		dataType: PcreValue,
+		data:     value,
+	}
+	return val
+}
+
+type FastValRegexIface interface {
+	Match(b []byte) bool
 }

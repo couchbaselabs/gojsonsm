@@ -306,6 +306,9 @@ func (t *Transformer) makeDataRefRecurse(expr Expression, context nodeRef, isRoo
 			return nil, errors.New("failed to compile RegexExpr: " + err.Error())
 		}
 		return NewFastVal(regex), nil
+	case PcreExpr:
+		pcreWrapper, err := MakePcreWrapper(expr.Pcre.(string))
+		return NewFastVal(pcreWrapper), err
 	case FuncExpr:
 		var params []DataRef
 

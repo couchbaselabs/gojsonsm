@@ -1,5 +1,7 @@
 // Copyright 2018 Couchbase, Inc. All rights reserved.
 
+// +build !pcre
+
 package gojsonsm
 
 import (
@@ -11,7 +13,7 @@ import (
 
 func TestContextParserToken(t *testing.T) {
 	assert := assert.New(t)
-	testString := "name.first == \"Neil\" || (age < 50) || (true)"
+	testString := "name.first == \"Neil\" || (age < 50) || (true) && `someStr` LIKE \"a(?<!foo)\""
 	ctx, err := NewExpressionParserCtx(testString)
 
 	// name.first
@@ -92,6 +94,31 @@ func TestContextParserToken(t *testing.T) {
 	_, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeEndParen))
 	assert.Nil(err)
+	ctx.advanceToken()
+
+	// ||
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// SomeStr
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// LIKE
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// a(?<!foo)\
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypePcre))
+	// Comment out as this will let us use "all" tag for testing
+	// assert.Equal(ErrorPcreNotSupported, err)
 	ctx.advanceToken()
 }
 
@@ -492,7 +519,7 @@ func TestContextParserMultiwordToken(t *testing.T) {
 	assert.Equal("abc", token)
 }
 
-func TestContextParserMultiwordToken2b(t *testing.T) {
+func TestContextParserMultiwordToken2a(t *testing.T) {
 	assert := assert.New(t)
 	testString := "`[XDCRInternal]`.`Version` > 1.0"
 	ctx, err := NewExpressionParserCtx(testString)
@@ -517,7 +544,7 @@ func TestContextParserMultiwordToken2b(t *testing.T) {
 	assert.Equal("1.0", token)
 }
 
-func TestContextParserMultiwordToken2(t *testing.T) {
+func TestContextParserMultiwordToken2b(t *testing.T) {
 	assert := assert.New(t)
 	testString := "name.first IS NOT NULL"
 	ctx, err := NewExpressionParserCtx(testString)
@@ -535,7 +562,7 @@ func TestContextParserMultiwordToken2(t *testing.T) {
 	assert.Nil(err)
 }
 
-func TestContextParserMultiwordToken2a(t *testing.T) {
+func TestContextParserMultiwordToken2c(t *testing.T) {
 	assert := assert.New(t)
 	testString := "`name`.`first` IS NOT NULL && isActive == true"
 	ctx, err := NewExpressionParserCtx(testString)

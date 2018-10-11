@@ -56,6 +56,7 @@ var ErrorMissingBacktickBracket error = fmt.Errorf("Invalid field - could not fi
 var ErrorEmptyLiteral error = fmt.Errorf("Literals cannot be empty")
 var ErrorEmptyToken error = fmt.Errorf("Token cannot be empty")
 var ErrorInvalidFuncArgs error = fmt.Errorf("Unable to parse arguments to specified built in function")
+var ErrorPcreNotSupported error = fmt.Errorf("Error: Current instance of gojsonsm does not have native PCRE support compiled")
 
 // Values by def should be enclosed within single quotes
 var valueRegex *regexp.Regexp = regexp.MustCompile(`^\".*\"$`)
@@ -79,6 +80,17 @@ func getCheckFuncPattern(name string) string {
 }
 
 var builtInFuncCheckers map[string]*regexp.Regexp
+
+// Support for pcre's lookahead class of regex
+const lookAheadPattern = "\\(\\?\\=.+\\)"
+const lookBehindPattern = "\\(\\?\\<.+\\)"
+const negLookAheadPattern = "\\(\\?\\!.+\\)"
+const negLookBehindPattern = "\\(\\?\\<\\!.+\\)"
+
+var pcreCheckers [4]*regexp.Regexp = [...]*regexp.Regexp{regexp.MustCompile(lookAheadPattern),
+	regexp.MustCompile(lookBehindPattern),
+	regexp.MustCompile(negLookAheadPattern),
+	regexp.MustCompile(negLookBehindPattern)}
 
 type ParserTreeNode struct {
 	tokenType ParseTokenType
@@ -233,6 +245,12 @@ type expressionParserContext struct {
 	// Each element in this map that is a field must have a counter part in the fieldTOkensPaths map above
 	// If it's a value, then it's indicated in the pair, and the value interface is used
 	funcOutputContext map[int]*funcOutputHelperPair
+
+	// Outputting context
+	currentOuputNode int
+
+	// Compile-time determined PCRE module
+	pcreWrapper PcreWrapperInterface
 }
 
 type checkFieldMode int
@@ -262,6 +280,7 @@ const (
 	TokenTypeOperator ParseTokenType = iota
 	TokenTypeValue    ParseTokenType = iota
 	TokenTypeRegex    ParseTokenType = iota
+	TokenTypePcre     ParseTokenType = iota
 	TokenTypeParen    ParseTokenType = iota
 	TokenTypeEndParen ParseTokenType = iota
 	TokenTypeTrue     ParseTokenType = iota
@@ -279,6 +298,8 @@ func (ptt ParseTokenType) String() string {
 		return "TokenTypeValue"
 	case TokenTypeRegex:
 		return "TokenTypeRegex"
+	case TokenTypePcre:
+		return "TokenTypePcre"
 	case TokenTypeParen:
 		return "TokenTypeParen"
 	case TokenTypeEndParen:
@@ -307,7 +328,7 @@ func (ptt ParseTokenType) isOpType() bool {
 
 // Regex is a type of special "value", and functions can act as values too
 func (ptt ParseTokenType) isValueType() bool {
-	return ptt == TokenTypeValue || ptt == TokenTypeRegex || ptt == TokenTypeFunc
+	return ptt == TokenTypeValue || ptt == TokenTypeRegex || ptt == TokenTypeFunc || ptt == TokenTypePcre
 }
 
 // Operator types
@@ -408,6 +429,16 @@ func (ctx *expressionParserContext) tokenIsBuiltInFuncType(token string) bool {
 	for key, checker := range builtInFuncCheckers {
 		if checker.MatchString(token) {
 			ctx.subCtx.lastMatchedFuncKey = key
+			return true
+		}
+	}
+	return false
+}
+
+// Returns true if the value is to be used for pcre types
+func tokenIsPcreValueType(token string) bool {
+	for _, pcreChecker := range pcreCheckers {
+		if pcreChecker.MatchString(token) {
 			return true
 		}
 	}
@@ -627,9 +658,12 @@ func (ctx *expressionParserContext) getValueTokenHelper() (string, ParseTokenTyp
 	// For value, strip the double quotes
 	token = strings.Trim(token, "\"")
 
-	if ctx.getTokenValueSubtype() == TokenTypeRegex {
+	if ctx.getTokenValueSubtype() != TokenTypeValue {
 		_, err := regexp.Compile(token)
 		if err != nil {
+			if tokenIsPcreValueType(token) {
+				return token, TokenTypePcre, nil
+			}
 			return token, TokenTypeRegex, err
 		}
 	}
@@ -1111,7 +1145,9 @@ func (ctx *expressionParserContext) outputNode(node ParserTreeNode, pos int) (Ex
 	case TokenTypeRegex:
 		return ctx.outputRegex(node)
 	case TokenTypeFunc:
-		return ctx.outputFunc(node, pos)
+		return ctx.outputFunc(pos)
+	case TokenTypePcre:
+		return ctx.outputPcre(node)
 	default:
 		return emptyExpression, fmt.Errorf("Error: Invalid Node token type: %v", node.tokenType.String())
 	}
@@ -1133,6 +1169,10 @@ func (ctx *expressionParserContext) outputRegex(node ParserTreeNode) (Expression
 	return RegexExpr{node.data}, nil
 }
 
+func (ctx *expressionParserContext) outputPcre(node ParserTreeNode) (Expression, error) {
+	return PcreExpr{node.data}, nil
+}
+
 func (ctx *expressionParserContext) outputField(pos int) (Expression, error) {
 	var out FieldExpr
 	path, ok := ctx.fieldTokenPaths[pos]
@@ -1144,7 +1184,7 @@ func (ctx *expressionParserContext) outputField(pos int) (Expression, error) {
 	return out, nil
 }
 
-func (ctx *expressionParserContext) outputFunc(node ParserTreeNode, pos int) (Expression, error) {
+func (ctx *expressionParserContext) outputFunc(pos int) (Expression, error) {
 	var out FuncExpr
 
 	pair, ok := ctx.funcOutputContext[pos]
