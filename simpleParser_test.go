@@ -492,7 +492,7 @@ func TestContextParserMultiwordToken(t *testing.T) {
 	assert.Equal("abc", token)
 }
 
-func TestContextParserMultiwordToken2(t *testing.T) {
+func TestContextParserMultiwordToken2b(t *testing.T) {
 	assert := assert.New(t)
 	testString := "`[XDCRInternal]`.`Version` > 1.0"
 	ctx, err := NewExpressionParserCtx(testString)
@@ -1918,4 +1918,88 @@ func TestParserExpressionOutputArrayEqualsMissing(t *testing.T) {
 	match, err := m.Match(udMarsh)
 	assert.Nil(err)
 	assert.False(match)
+}
+
+func TestParserExpressionMathRoundValues(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+		["equals",
+			["func", "mathRound",
+				["field", "number"]
+			],
+			["value", 5]
+		]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+
+	strExpr := "ROUND(number) ==  5"
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{jsonExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"number": 5.4,
+	}
+
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+}
+
+func TestParserExpressionMathRoundValues2(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	["equals",
+		["func", "mathRound",
+			["field", "number"]
+		],
+		["func", "mathRound",
+			["value", 5]
+		]
+	]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+
+	strExpr := "ROUND(number) ==  ROUND(5)"
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{jsonExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"number": 5.4,
+	}
+
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
 }
