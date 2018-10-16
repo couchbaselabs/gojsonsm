@@ -5,6 +5,7 @@ package gojsonsm
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -54,6 +55,7 @@ var ErrorEmptyNest error = fmt.Errorf("Array index cannot be empty")
 var ErrorMissingBacktickBracket error = fmt.Errorf("Invalid field - could not find matching ending backtick or bracket")
 var ErrorEmptyLiteral error = fmt.Errorf("Literals cannot be empty")
 var ErrorEmptyToken error = fmt.Errorf("Token cannot be empty")
+var ErrorInvalidFuncArgs error = fmt.Errorf("Unable to parse arguments to specified built in function")
 
 // Values by def should be enclosed within single quotes
 var valueRegex *regexp.Regexp = regexp.MustCompile(`^\".*\"$`)
@@ -66,6 +68,17 @@ var fieldTokenInt *regexp.Regexp = regexp.MustCompile(`[0-9]`)
 
 // But they cannot have leading zeros
 var fieldIndexNoLeadingZero *regexp.Regexp = regexp.MustCompile(`[^0][0-9]+`)
+
+// Functions patterns
+var funcTranslateTable map[string]string = map[string]string{
+	"ROUND": "mathRound",
+}
+
+func getCheckFuncPattern(name string) string {
+	return fmt.Sprintf(`^%s\((?P<args>.+)\)$`, name)
+}
+
+var builtInFuncCheckers map[string]*regexp.Regexp
 
 type ParserTreeNode struct {
 	tokenType ParseTokenType
@@ -137,6 +150,7 @@ type parserSubContext struct {
 	lastSubFieldNode       int // The last finished left side of the op
 	skipAdvanceCurrentMode bool
 	opTokenContext         opTokenContext
+	lastMatchedFuncKey     string
 
 	// For tree organization
 	lastParserDataNode  int // Last inserted parser data node location
@@ -144,6 +158,9 @@ type parserSubContext struct {
 	lastFieldIndex      int
 	lastOpIndex         int
 	lastValueIndex      int
+
+	// For inserting node
+	funcHelperCtx *funcOutputHelperPair
 
 	// Means that we should return as soon as the one layer of field -> op -> value is done
 	oneLayerMode bool
@@ -176,6 +193,12 @@ type multiwordHelperPair struct {
 	valid            bool
 }
 
+type funcOutputHelperPair struct {
+	funcName  string
+	valueMode bool
+	value     interface{} // if function is used in the context of a value
+}
+
 type expressionParserContext struct {
 	// For token reading
 	tokens               []string
@@ -183,6 +206,7 @@ type expressionParserContext struct {
 	advTokenPositionOnly bool // This flag is set once, and the corresponding method will toggle it off automatically
 	multiwordHelperMap   map[string]*multiwordHelperPair
 	multiwordMapOnce     sync.Once
+	regexCheckersInit    sync.Once
 	// Split the last successful field token into subtokens for transformer's Path
 	lastFieldTokens []string
 
@@ -205,8 +229,10 @@ type expressionParserContext struct {
 	// to Path for field expressions. This map stores the information. Key is the index of ParserTreeNode
 	fieldTokenPaths map[int][]string
 
-	// Outputting context
-	currentOuputNode int
+	// Functions are essentially like augmented fields/values.
+	// Each element in this map that is a field must have a counter part in the fieldTOkensPaths map above
+	// If it's a value, then it's indicated in the pair, and the value interface is used
+	funcOutputContext map[int]*funcOutputHelperPair
 }
 
 type checkFieldMode int
@@ -232,6 +258,7 @@ type ParseTokenType int
 
 const (
 	TokenTypeField    ParseTokenType = iota
+	TokenTypeFunc     ParseTokenType = iota
 	TokenTypeOperator ParseTokenType = iota
 	TokenTypeValue    ParseTokenType = iota
 	TokenTypeRegex    ParseTokenType = iota
@@ -271,16 +298,16 @@ func (ptt ParseTokenType) isBoolType() bool {
 }
 
 func (ptt ParseTokenType) isFieldType() bool {
-	return ptt == TokenTypeField
+	return ptt == TokenTypeField || ptt == TokenTypeFunc
 }
 
 func (ptt ParseTokenType) isOpType() bool {
 	return ptt == TokenTypeOperator
 }
 
-// Regex is a type of special "value"
+// Regex is a type of special "value", and functions can act as values too
 func (ptt ParseTokenType) isValueType() bool {
-	return ptt == TokenTypeValue || ptt == TokenTypeRegex
+	return ptt == TokenTypeValue || ptt == TokenTypeRegex || ptt == TokenTypeFunc
 }
 
 // Operator types
@@ -367,6 +394,26 @@ func tokenIsChainOpType(token string) bool {
 	return token == TokenOperatorAnd || token == TokenOperatorAnd2 || token == TokenOperatorOr || token == TokenOperatorOr2
 }
 
+func (ctx *expressionParserContext) tokenIsBuiltInFuncType(token string) bool {
+	ctx.regexCheckersInit.Do(func() {
+		builtInFuncCheckers = make(map[string]*regexp.Regexp)
+		ctx.funcOutputContext = make(map[int]*funcOutputHelperPair)
+		for k, _ := range funcTranslateTable {
+			regex := regexp.MustCompile(getCheckFuncPattern(k))
+			builtInFuncCheckers[k] = regex
+		}
+	})
+
+	ctx.subCtx.lastMatchedFuncKey = ""
+	for key, checker := range builtInFuncCheckers {
+		if checker.MatchString(token) {
+			ctx.subCtx.lastMatchedFuncKey = key
+			return true
+		}
+	}
+	return false
+}
+
 func (opCtx opTokenContext) isChainOp() bool {
 	return opCtx == chainOp
 }
@@ -392,6 +439,9 @@ func (ctx *expressionParserContext) advanceToken() error {
 		ctx.advTokenPositionOnly = false
 		return nil
 	}
+
+	ctx.subCtx.lastMatchedFuncKey = ""
+	ctx.subCtx.funcHelperCtx = nil
 
 	// context mode transition
 	switch ctx.subCtx.currentMode {
@@ -607,10 +657,46 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 		return token, TokenTypeTrue, nil
 	} else if token == "false" {
 		return token, TokenTypeFalse, nil
+	} else if ctx.tokenIsBuiltInFuncType(token) {
+		return ctx.getFuncFieldTokenHelper(token)
 	} else if strings.Contains(token, "(") || strings.Contains(token, ")") {
 		return ctx.getCurrentTokenParenHelper(token)
 	} else {
 		return ctx.getTokenFieldTokenHelper(token)
+	}
+}
+
+func (ctx *expressionParserContext) getFuncFieldTokenHelper(token string) (string, ParseTokenType, error) {
+	regex := builtInFuncCheckers[ctx.subCtx.lastMatchedFuncKey]
+
+	subMatches := regex.FindStringSubmatch(token)
+	if len(subMatches) != 2 {
+		return token, TokenTypeFunc, ErrorInvalidFuncArgs
+	}
+	args := subMatches[1]
+
+	if ctx.subCtx.currentMode == fieldMode {
+		ctx.lastFieldTokens = make([]string, 0)
+		ctx.subCtx.funcHelperCtx = &funcOutputHelperPair{funcName: funcTranslateTable[ctx.subCtx.lastMatchedFuncKey]}
+		return token, TokenTypeFunc, checkAndParseField(args, &ctx.lastFieldTokens)
+	} else if ctx.subCtx.currentMode == valueMode {
+		ctx.subCtx.funcHelperCtx = &funcOutputHelperPair{funcName: funcTranslateTable[ctx.subCtx.lastMatchedFuncKey],
+			valueMode: true,
+		}
+		// For value, strip the double quotes
+		args = strings.Trim(args, "\"")
+		if valueNumRegex.MatchString(args) {
+			numArg, err := strconv.Atoi(args)
+			if err != nil {
+				return token, TokenTypeFunc, fmt.Errorf("Error converting argument when parsing func argument: %v", err)
+			}
+			ctx.subCtx.funcHelperCtx.value = numArg
+		} else {
+			ctx.subCtx.funcHelperCtx.value = args
+		}
+		return token, TokenTypeFunc, nil
+	} else {
+		return token, TokenTypeFunc, fmt.Errorf("Error: %v mode is invalid for functions", ctx.subCtx.currentMode.String())
 	}
 }
 
@@ -810,6 +896,10 @@ func (ctx *expressionParserContext) insertNode(newNode ParserTreeNode) error {
 		ctx.subCtx.lastSubFieldNode = ctx.subCtx.lastBinTreeDataNode
 		// Store the corresponding path vaiables
 		ctx.fieldTokenPaths[ctx.subCtx.lastBinTreeDataNode] = DeepCopyStringArray(ctx.lastFieldTokens)
+
+		if ctx.subCtx.funcHelperCtx != nil {
+			ctx.funcOutputContext[ctx.subCtx.lastFieldIndex] = ctx.subCtx.funcHelperCtx
+		}
 	case chainMode:
 		fallthrough
 	case opMode:
@@ -836,6 +926,9 @@ func (ctx *expressionParserContext) insertNode(newNode ParserTreeNode) error {
 		// Now that we have completed a sub-expression, the "op" becomes the parent of the last completed nodes
 		ctx.subCtx.lastSubFieldNode = ctx.subCtx.lastOpIndex
 
+		if ctx.subCtx.funcHelperCtx != nil {
+			ctx.funcOutputContext[ctx.subCtx.lastValueIndex] = ctx.subCtx.funcHelperCtx
+		}
 	default:
 		// OK to leak the node created above because we should be erroring out anyway
 		return fmt.Errorf("Unsure how to insert into tree: %v", newNode)
@@ -1008,7 +1101,7 @@ func (ctx *expressionParserContext) outputNode(node ParserTreeNode, pos int) (Ex
 	case TokenTypeOperator:
 		return ctx.outputOp(node, pos)
 	case TokenTypeField:
-		return ctx.outputField(node, pos)
+		return ctx.outputField(pos)
 	case TokenTypeTrue:
 		return ctx.outputTrue()
 	case TokenTypeFalse:
@@ -1017,6 +1110,8 @@ func (ctx *expressionParserContext) outputNode(node ParserTreeNode, pos int) (Ex
 		return ctx.outputValue(node)
 	case TokenTypeRegex:
 		return ctx.outputRegex(node)
+	case TokenTypeFunc:
+		return ctx.outputFunc(node, pos)
 	default:
 		return emptyExpression, fmt.Errorf("Error: Invalid Node token type: %v", node.tokenType.String())
 	}
@@ -1038,7 +1133,7 @@ func (ctx *expressionParserContext) outputRegex(node ParserTreeNode) (Expression
 	return RegexExpr{node.data}, nil
 }
 
-func (ctx *expressionParserContext) outputField(node ParserTreeNode, pos int) (Expression, error) {
+func (ctx *expressionParserContext) outputField(pos int) (Expression, error) {
 	var out FieldExpr
 	path, ok := ctx.fieldTokenPaths[pos]
 	if !ok {
@@ -1047,6 +1142,26 @@ func (ctx *expressionParserContext) outputField(node ParserTreeNode, pos int) (E
 
 	out.Path = path
 	return out, nil
+}
+
+func (ctx *expressionParserContext) outputFunc(node ParserTreeNode, pos int) (Expression, error) {
+	var out FuncExpr
+
+	pair, ok := ctx.funcOutputContext[pos]
+	if !ok {
+		return out, fmt.Errorf("Error: Unable to find internally stored function name for outputting")
+	}
+	out.FuncName = pair.funcName
+
+	var subFieldExpr Expression
+	var err error
+	if !pair.valueMode {
+		subFieldExpr, err = ctx.outputField(pos)
+	} else {
+		subFieldExpr, err = ctx.outputValue(NewParserTreeNode(TokenTypeValue, pair.value))
+	}
+	out.Params = append(out.Params, subFieldExpr)
+	return out, err
 }
 
 func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expression, error) {
