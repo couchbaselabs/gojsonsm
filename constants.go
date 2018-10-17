@@ -6,6 +6,26 @@ import (
 	"fmt"
 )
 
+// Function related constants
+const (
+	MathFuncAbs   string = "mathAbs"
+	MathFuncAcos  string = "mathFuncAcos"
+	MathFuncAsin  string = "mathFuncAsin"
+	MathFuncAtan  string = "mathFuncAtan"
+	MathFuncCeil  string = "mathCeil"
+	MathFuncCos   string = "mathCos"
+	MathFuncExp   string = "mathFuncExp"
+	MathFuncFloor string = "mathFuncFloor"
+	MathFuncLog   string = "mathFuncLog"
+	MathFuncLn    string = "mathFuncLn"
+	MathFuncRound string = "mathRound"
+	MathFuncSin   string = "mathSin"
+	MathFuncSqrt  string = "mathSqrt"
+	MathFuncTan   string = "mathTan"
+)
+
+// Parser related constants
+// Error constants
 var emptyExpression Expression
 var ErrorNotFound error = fmt.Errorf("Error: Specified resource was not found")
 var ErrorNoMoreTokens error = fmt.Errorf("Error: No more token found")

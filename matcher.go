@@ -107,9 +107,48 @@ func (m *Matcher) literalFromSlot(slot SlotID) FastVal {
 
 func (m *Matcher) resolveFunc(fn FuncRef, activeLit *FastVal) FastVal {
 	switch fn.FuncName {
-	case "mathRound":
+	case MathFuncAbs:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathAbs(p1)
+	case MathFuncAcos:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathAcos(p1)
+	case MathFuncAsin:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathAsin(p1)
+	case MathFuncAtan:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathAtan(p1)
+	case MathFuncRound:
 		p1 := m.resolveParam(fn.Params[0], activeLit)
 		return FastValMathRound(p1)
+	case MathFuncCos:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathCos(p1)
+	case MathFuncSin:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathSin(p1)
+	case MathFuncTan:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathTan(p1)
+	case MathFuncSqrt:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathSqrt(p1)
+	case MathFuncExp:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathExp(p1)
+	case MathFuncLn:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathLn(p1)
+	case MathFuncLog:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathLog(p1)
+	case MathFuncCeil:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathCeil(p1)
+	case MathFuncFloor:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathFloor(p1)
 	default:
 		panic("encountered unexpected function name")
 	}

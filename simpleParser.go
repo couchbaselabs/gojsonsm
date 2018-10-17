@@ -47,6 +47,8 @@ var valueRegex *regexp.Regexp = regexp.MustCompile(`^\".*\"$`)
 // Or Values can be int or floats by themselves (w/o alpha char)
 var valueNumRegex *regexp.Regexp = regexp.MustCompile(`^(-?)(0|([1-9][0-9]*))(\.[0-9]+)?$`)
 
+var intNumRegex *regexp.Regexp = regexp.MustCompile(`^(-?)[0-9]+$`)
+
 // Field path can be integers
 var fieldTokenInt *regexp.Regexp = regexp.MustCompile(`[0-9]`)
 
@@ -55,7 +57,20 @@ var fieldIndexNoLeadingZero *regexp.Regexp = regexp.MustCompile(`[^0][0-9]+`)
 
 // Functions patterns
 var funcTranslateTable map[string]string = map[string]string{
-	"ROUND": "mathRound",
+	"ABS":   MathFuncAbs,
+	"ACOS":  MathFuncAcos,
+	"ASIN":  MathFuncAsin,
+	"ATAN":  MathFuncAtan,
+	"CEIL":  MathFuncCeil,
+	"COS":   MathFuncCos,
+	"EXP":   MathFuncExp,
+	"FLOOR": MathFuncFloor,
+	"LOG":   MathFuncLog,
+	"LN":    MathFuncLn,
+	"SIN":   MathFuncSin,
+	"TAN":   MathFuncTan,
+	"ROUND": MathFuncRound,
+	"SQRT":  MathFuncSqrt,
 }
 
 func getCheckFuncPattern(name string) string {
@@ -1100,7 +1115,16 @@ func (ctx *expressionParserContext) outputFalse() (Expression, error) {
 }
 
 func (ctx *expressionParserContext) outputValue(node ParserTreeNode) (Expression, error) {
-	return ValueExpr{node.data}, nil
+	var outputData interface{} = node.data
+	var err error
+	if strData, ok := node.data.(string); ok && valueNumRegex.MatchString(strData) {
+		if intNumRegex.MatchString(strData) {
+			outputData, err = strconv.ParseInt(strData, 10, 64)
+		} else {
+			outputData, err = strconv.ParseFloat(strData, 64)
+		}
+	}
+	return ValueExpr{outputData}, err
 }
 
 func (ctx *expressionParserContext) outputRegex(node ParserTreeNode) (Expression, error) {
