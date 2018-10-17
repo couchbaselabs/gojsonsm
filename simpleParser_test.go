@@ -2030,3 +2030,32 @@ func TestParserExpressionMathRoundValues2(t *testing.T) {
 	assert.Nil(err)
 	assert.True(match)
 }
+
+func TestParserBunchaMathFuncs(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "ABS(negNum) ==  5 && SQRT(squaredNum) > 1"
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"negNum":     -5,
+		"squaredNum": 4,
+	}
+
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+}
