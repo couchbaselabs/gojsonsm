@@ -121,8 +121,8 @@ func (val FastVal) IsInt() bool {
 }
 
 func (val FastVal) IsUInt() bool {
-	return val.dataType == IntValue ||
-		val.dataType == JsonIntValue
+	return val.dataType == UintValue ||
+		val.dataType == JsonUintValue
 }
 
 func (val FastVal) IsFloat() bool {
