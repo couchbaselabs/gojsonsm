@@ -38,6 +38,7 @@ var ErrorLeadingZeroes error = fmt.Errorf("Nested mode index must not have leadi
 var ErrorAllInts error = fmt.Errorf("Array index must be a valid integer")
 var ErrorEmptyNest error = fmt.Errorf("Array index cannot be empty")
 var ErrorMissingBacktickBracket error = fmt.Errorf("Invalid field - could not find matching ending backtick or bracket")
+var ErrorMissingQuote error = fmt.Errorf("Invalid token - could not find matching ending quote")
 var ErrorEmptyLiteral error = fmt.Errorf("Literals cannot be empty")
 var ErrorEmptyToken error = fmt.Errorf("Token cannot be empty")
 var ErrorInvalidFuncArgs error = fmt.Errorf("Unable to parse arguments to specified built in function")

@@ -628,8 +628,8 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 	if ctx.currentTokenIndex >= len(ctx.tokens) {
 		return "", TokenTypeInvalid, ErrorNoMoreTokens
 	}
-	token := ctx.tokens[ctx.currentTokenIndex]
 
+	token := ctx.tokens[ctx.currentTokenIndex]
 	if ctx.checkIfTokenIsPotentiallyOpType(token) {
 		return ctx.handleMultiTokens()
 	} else if tokenIsOpType(token) {
@@ -648,9 +648,44 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 		return ctx.getFuncFieldTokenHelper(token)
 	} else if strings.Contains(token, "(") || strings.Contains(token, ")") {
 		return ctx.getCurrentTokenParenHelper(token)
+	} else if tokenIsUnfinishedValueType(token) {
+		return ctx.getUnfinishedValueHelper(`"`)
 	} else {
 		return ctx.getTokenFieldTokenHelper(token)
 	}
+}
+
+func tokenIsUnfinishedValueType(token string) bool {
+	return strings.HasPrefix(token, `"`) && !strings.HasSuffix(token, `"`)
+}
+
+func (ctx *expressionParserContext) getUnfinishedValueHelper(delim string) (string, ParseTokenType, error) {
+	outputToken := strings.Trim(ctx.tokens[ctx.currentTokenIndex], delim)
+	tokensLen := len(ctx.tokens)
+	for ctx.currentTokenIndex++; ctx.currentTokenIndex < tokensLen; ctx.currentTokenIndex++ {
+		var breakout bool
+		token := ctx.tokens[ctx.currentTokenIndex]
+		if ctx.parenDepth > 0 && strings.HasSuffix(token, ")") {
+			ctx.handleParenSuffix(")")
+			tokensLen = len(ctx.tokens)
+			token = ctx.tokens[ctx.currentTokenIndex]
+		}
+		if strings.HasSuffix(token, delim) {
+			breakout = true
+			token = strings.Trim(token, delim)
+		}
+		outputToken = fmt.Sprintf("%s %s", outputToken, token)
+
+		if breakout {
+			break
+		}
+	}
+
+	if ctx.currentTokenIndex == tokensLen {
+		return "", TokenTypeInvalid, ErrorMissingQuote
+	}
+
+	return outputToken, ctx.getTokenValueSubtype(), nil
 }
 
 func (ctx *expressionParserContext) getFuncFieldTokenHelper(token string) (string, ParseTokenType, error) {
