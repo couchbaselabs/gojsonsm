@@ -649,6 +649,77 @@ func TestContextParserMatch(t *testing.T) {
 
 }
 
+func TestContextParserWSValues(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.first ==  \"Amgen Inc\""
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// `name`.`first`
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// ==
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("==", token)
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// Amgen Inc
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
+	assert.Nil(err)
+	assert.Equal("Amgen Inc", token)
+
+}
+
+func TestContextParserWSValues2(t *testing.T) {
+	assert := assert.New(t)
+	testString := `(company.name ==  "Amgen Inc") && true`
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// (
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeParen))
+	assert.Nil(err)
+
+	// `company`.`name`
+	_, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// ==
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("==", token)
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// Amgen Inc
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
+	assert.Nil(err)
+	assert.Equal("Amgen Inc", token)
+	ctx.advanceToken()
+
+	// )
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal((ParseTokenType)(TokenTypeEndParen), tokenType)
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// &&
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("&&", token)
+	assert.Nil(err)
+	ctx.advanceToken()
+
+}
+
 func TestSimpleParserCompare(t *testing.T) {
 	assert := assert.New(t)
 
