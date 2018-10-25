@@ -41,8 +41,9 @@ import (
  * - Parenthesis parsing is there but could be a bit wonky should users choose to have invalid and weird syntax with it
  */
 
-// Values by def should be enclosed within single quotes
+// Values by def should be enclosed within double quotes or single quotes
 var valueRegex *regexp.Regexp = regexp.MustCompile(`^\".*\"$`)
+var valueRegex2 *regexp.Regexp = regexp.MustCompile(`^\'.*\'$`)
 
 // Or Values can be int or floats by themselves (w/o alpha char)
 var valueNumRegex *regexp.Regexp = regexp.MustCompile(`^(-?)(0|([1-9][0-9]*))(\.[0-9]+)?$`)
@@ -434,9 +435,11 @@ func (ctx *expressionParserContext) advanceToken() error {
 		ctx.subCtx.currentMode = opMode
 	case opMode:
 		switch ctx.subCtx.opTokenContext {
-		// These ops do not have fields
 		case noFieldOp:
+			// These ops do not have fields
 			ctx.subCtx.currentMode = chainMode
+		case chainOp:
+			ctx.subCtx.currentMode = fieldMode
 		default:
 			// After the op mode, the next mode should be value mode
 			ctx.subCtx.currentMode = valueMode
@@ -605,11 +608,12 @@ func (ctx *expressionParserContext) getTokenValueSubtype() ParseTokenType {
 	}
 }
 
-func (ctx *expressionParserContext) getValueTokenHelper() (string, ParseTokenType, error) {
+func (ctx *expressionParserContext) getValueTokenHelper(delim string) (string, ParseTokenType, error) {
 	token := ctx.tokens[ctx.currentTokenIndex]
 
 	// For value, strip the double quotes
-	token = strings.Trim(token, "\"")
+	token = strings.TrimPrefix(token, delim)
+	token = strings.TrimSuffix(token, delim)
 
 	if ctx.getTokenValueSubtype() != TokenTypeValue {
 		_, err := regexp.Compile(token)
@@ -636,8 +640,10 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 		token = replaceOpTokenIfNecessary(token)
 		ctx.checkAndMarkDetailedOpToken(token)
 		return token, TokenTypeOperator, nil
-	} else if valueRegex.MatchString(token) {
-		return ctx.getValueTokenHelper()
+	} else if ctx.subCtx.currentMode == valueMode && valueRegex.MatchString(token) {
+		return ctx.getValueTokenHelper(`"`)
+	} else if ctx.subCtx.currentMode == valueMode && valueRegex2.MatchString(token) {
+		return ctx.getValueTokenHelper("`")
 	} else if valueNumRegex.MatchString(token) {
 		return token, ctx.getTokenValueSubtype(), nil
 	} else if token == "true" {
@@ -648,19 +654,24 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 		return ctx.getFuncFieldTokenHelper(token)
 	} else if strings.Contains(token, "(") || strings.Contains(token, ")") {
 		return ctx.getCurrentTokenParenHelper(token)
-	} else if tokenIsUnfinishedValueType(token) {
-		return ctx.getUnfinishedValueHelper(`"`)
+	} else if delim, unfinished := tokenIsUnfinishedValueType(token); ctx.subCtx.currentMode == valueMode && unfinished {
+		return ctx.getUnfinishedValueHelper(delim)
 	} else {
 		return ctx.getTokenFieldTokenHelper(token)
 	}
 }
 
-func tokenIsUnfinishedValueType(token string) bool {
-	return strings.HasPrefix(token, `"`) && !strings.HasSuffix(token, `"`)
+func tokenIsUnfinishedValueType(token string) (string, bool) {
+	if strings.HasPrefix(token, `"`) && !strings.HasSuffix(token, `"`) {
+		return `"`, true
+	} else if strings.HasPrefix(token, "'") && !strings.HasSuffix(token, "'") {
+		return `'`, true
+	}
+	return "", false
 }
 
 func (ctx *expressionParserContext) getUnfinishedValueHelper(delim string) (string, ParseTokenType, error) {
-	outputToken := strings.Trim(ctx.tokens[ctx.currentTokenIndex], delim)
+	outputToken := strings.TrimPrefix(ctx.tokens[ctx.currentTokenIndex], delim)
 	tokensLen := len(ctx.tokens)
 	for ctx.currentTokenIndex++; ctx.currentTokenIndex < tokensLen; ctx.currentTokenIndex++ {
 		var breakout bool
@@ -672,7 +683,7 @@ func (ctx *expressionParserContext) getUnfinishedValueHelper(delim string) (stri
 		}
 		if strings.HasSuffix(token, delim) {
 			breakout = true
-			token = strings.Trim(token, delim)
+			token = strings.TrimSuffix(token, delim)
 		}
 		outputToken = fmt.Sprintf("%s %s", outputToken, token)
 
