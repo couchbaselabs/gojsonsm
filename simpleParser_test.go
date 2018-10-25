@@ -720,6 +720,82 @@ func TestContextParserWSValues2(t *testing.T) {
 
 }
 
+func TestContextParserWSValuesWEmbeddedQuotes(t *testing.T) {
+	assert := assert.New(t)
+	testString := "company.name ==  \"\"dummyCorp\"\""
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// `name`.`first`
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// ==
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("==", token)
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// "dummyCorp
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
+	assert.Nil(err)
+	assert.Equal(`"dummyCorp"`, token)
+
+}
+
+func TestContextParserWSValuesWEmbeddedQuotes2(t *testing.T) {
+	assert := assert.New(t)
+	testString := "company.name ==  \"\"dummy space Corp\"\""
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// `name`.`first`
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// ==
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("==", token)
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// "dummy space corp
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
+	assert.Nil(err)
+	assert.Equal(`"dummy space Corp"`, token)
+}
+
+func TestContextParserWSValuesWEmbeddedQuotes2a(t *testing.T) {
+	assert := assert.New(t)
+	testString := `company.name ==  "'dummy space Corp'"`
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// `name`.`first`
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// ==
+	token, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("==", token)
+	assert.Nil(err)
+	ctx.advanceToken()
+
+	// dummy space corp
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
+	assert.Nil(err)
+	assert.Equal(`'dummy space Corp'`, token)
+}
+
 func TestSimpleParserCompare(t *testing.T) {
 	assert := assert.New(t)
 
