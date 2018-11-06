@@ -22,6 +22,7 @@ const (
 	MathFuncSin   string = "mathSin"
 	MathFuncSqrt  string = "mathSqrt"
 	MathFuncTan   string = "mathTan"
+	MathFuncPow   string = "mathPow"
 )
 
 // Parser related constants
@@ -90,3 +91,8 @@ const (
 	matchOp   opTokenContext = iota
 	noFieldOp opTokenContext = iota
 )
+
+// Function helpers
+type checkAndGetKeyFunc func(string) (bool, string)
+type funcNameType string
+type funcRecursiveIdx int

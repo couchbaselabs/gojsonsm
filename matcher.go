@@ -149,8 +149,12 @@ func (m *Matcher) resolveFunc(fn FuncRef, activeLit *FastVal) FastVal {
 	case MathFuncFloor:
 		p1 := m.resolveParam(fn.Params[0], activeLit)
 		return FastValMathFloor(p1)
+	case MathFuncPow:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		p2 := m.resolveParam(fn.Params[1], activeLit)
+		return FastValMathPow(p1, p2)
 	default:
-		panic("encountered unexpected function name")
+		panic(fmt.Sprintf("encountered unexpected function name: %v", fn.FuncName))
 	}
 }
 

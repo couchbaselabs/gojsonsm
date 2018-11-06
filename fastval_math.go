@@ -42,6 +42,7 @@ func FastValMathAbs(val FastVal) FastVal {
 }
 
 type floatToFloatOp func(float64) float64
+type float2ToFloatOp func(float64, float64) float64
 
 func genericFastValFloatOp(val FastVal, op floatToFloatOp) FastVal {
 	if val.IsNumeric() {
@@ -49,6 +50,14 @@ func genericFastValFloatOp(val FastVal, op floatToFloatOp) FastVal {
 	}
 
 	return NewInvalidFastVal()
+}
+
+func genericFastVal2FloatsOp(val, val1 FastVal, op float2ToFloatOp) FastVal {
+	if !val.IsNumeric() || !val1.IsNumeric() {
+		return NewInvalidFastVal()
+	}
+
+	return NewFloatFastVal(op(val.AsFloat(), val1.AsFloat()))
 }
 
 func FastValMathSqrt(val FastVal) FastVal {
@@ -97,4 +106,8 @@ func FastValMathCeil(val FastVal) FastVal {
 
 func FastValMathFloor(val FastVal) FastVal {
 	return genericFastValFloatOp(val, math.Floor)
+}
+
+func FastValMathPow(val, val1 FastVal) FastVal {
+	return genericFastVal2FloatsOp(val, val1, math.Pow)
 }

@@ -74,8 +74,27 @@ var funcTranslateTable map[string]string = map[string]string{
 	"SQRT":  MathFuncSqrt,
 }
 
+// Two variables function patterns
+var func2VarsTranslateTable map[string]string = map[string]string{
+	"POWER": MathFuncPow,
+}
+
+func getOutputFuncName(userInput string) string {
+	if val, ok := funcTranslateTable[userInput]; ok {
+		return val
+	} else if val, ok := func2VarsTranslateTable[userInput]; ok {
+		return val
+	} else {
+		return ""
+	}
+}
+
 func getCheckFuncPattern(name string) string {
 	return fmt.Sprintf(`^%s\((?P<args>.+)\)$`, name)
+}
+
+func getCheckFunc2Pattern(name string) string {
+	return fmt.Sprintf(`^%s\((?P<args>.+), *(?P<args>.+)\)$`, name)
 }
 
 var builtInFuncCheckers map[string]*regexp.Regexp
@@ -128,7 +147,7 @@ type parserSubContext struct {
 	lastValueIndex      int
 
 	// For inserting node
-	funcHelperCtx *funcOutputHelperPair
+	funcHelperCtx *funcOutputHelper
 
 	// Means that we should return as soon as the one layer of field -> op -> value is done
 	oneLayerMode bool
@@ -164,10 +183,12 @@ type multiwordHelperPair struct {
 	valid            bool
 }
 
-type funcOutputHelperPair struct {
-	funcName  string
-	valueMode bool
-	value     interface{} // if function is used in the context of a value
+type funcOutputHelper struct {
+	// args represent levels of recursion for the first slice, and then each element at each level
+	// The first element of []interface{} is always the func name
+	args             [][]interface{}
+	lvlMarker        int
+	recursiveKeyFunc checkAndGetKeyFunc
 }
 
 type opSeeker struct {
@@ -255,7 +276,7 @@ type expressionParserContext struct {
 	// Functions are essentially like augmented fields/values.
 	// Each element in this map that is a field must have a counter part in the fieldTOkensPaths map above
 	// If it's a value, then it's indicated in the pair, and the value interface is used
-	funcOutputContext map[int]*funcOutputHelperPair
+	funcOutputContext map[int]*funcOutputHelper
 
 	// Outputting context
 	currentOuputNode int
@@ -426,24 +447,32 @@ func tokenIsChainOpType(token string) bool {
 	return token == TokenOperatorAnd || token == TokenOperatorAnd2 || token == TokenOperatorOr || token == TokenOperatorOr2
 }
 
-func (ctx *expressionParserContext) tokenIsBuiltInFuncType(token string) bool {
+func (ctx *expressionParserContext) tokenIsBuiltInFuncType(token string, setCtx bool) (bool, string) {
 	ctx.regexCheckersInit.Do(func() {
 		builtInFuncCheckers = make(map[string]*regexp.Regexp)
-		ctx.funcOutputContext = make(map[int]*funcOutputHelperPair)
+		ctx.funcOutputContext = make(map[int]*funcOutputHelper)
 		for k, _ := range funcTranslateTable {
 			regex := regexp.MustCompile(getCheckFuncPattern(k))
 			builtInFuncCheckers[k] = regex
 		}
+		for k, _ := range func2VarsTranslateTable {
+			regex := regexp.MustCompile(getCheckFunc2Pattern(k))
+			builtInFuncCheckers[k] = regex
+		}
 	})
 
-	ctx.subCtx.lastMatchedFuncKey = ""
+	if setCtx {
+		ctx.subCtx.lastMatchedFuncKey = ""
+	}
 	for key, checker := range builtInFuncCheckers {
 		if checker.MatchString(token) {
-			ctx.subCtx.lastMatchedFuncKey = key
-			return true
+			if setCtx {
+				ctx.subCtx.lastMatchedFuncKey = key
+			}
+			return true, key
 		}
 	}
-	return false
+	return false, ""
 }
 
 // Returns true if the value is to be used for pcre types
@@ -714,15 +743,13 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 		token = replaceOpTokenIfNecessary(token)
 		ctx.checkAndMarkDetailedOpToken(token)
 		return token, TokenTypeOperator, nil
-	} else if ctx.subCtx.currentMode == valueMode && valueRegex.MatchString(token) {
-		return ctx.getValueTokenHelper(`"`)
-	} else if ctx.subCtx.currentMode == valueMode && valueRegex2.MatchString(token) {
-		return ctx.getValueTokenHelper("`")
-	} else if valueNumRegex.MatchString(token) {
+	} else if delim, ok := valueCheck(token).(string); ok && ctx.subCtx.currentMode == valueMode {
+		return ctx.getValueTokenHelper(delim)
+	} else if isNum, ok := valueCheck(token).(bool); ok && isNum {
 		return token, ctx.getTokenValueSubtype(), nil
 	} else if token == "true" || token == "false" {
 		return ctx.getTrueFalseValue(token)
-	} else if isFunc := ctx.tokenIsBuiltInFuncType(token); isFunc {
+	} else if isFunc, key := ctx.tokenIsBuiltInFuncType(token, key); isFunc {
 		return ctx.getFuncFieldTokenHelper(token)
 	} else if strings.Contains(token, "(") || strings.Contains(token, ")") {
 		return ctx.getCurrentTokenParenHelper(token)
@@ -773,35 +800,83 @@ func (ctx *expressionParserContext) getUnfinishedValueHelper(delim string) (stri
 	return outputToken, ctx.getTokenValueSubtype(), nil
 }
 
-func (ctx *expressionParserContext) getFuncFieldTokenHelper(token string) (string, ParseTokenType, error) {
-	regex := builtInFuncCheckers[ctx.subCtx.lastMatchedFuncKey]
+func (ctx *expressionParserContext) NewFuncHelper() *funcOutputHelper {
+	helper := &funcOutputHelper{
+		args: make([][]interface{}, 1),
+		recursiveKeyFunc: func(token string) (bool, string) {
+			return ctx.tokenIsBuiltInFuncType(token, false)
+		},
+	}
+	return helper
+}
+
+func (helper *funcOutputHelper) resetLevel() {
+	helper.lvlMarker = 0
+}
+
+func (helper *funcOutputHelper) resolveRecursiveFuncs(token string, lastFunc string) error {
+	regex := builtInFuncCheckers[lastFunc]
+
+	// First set the function name
+	helper.args[helper.lvlMarker] = append(helper.args[helper.lvlMarker], lastFunc)
 
 	subMatches := regex.FindStringSubmatch(token)
-	if len(subMatches) != 2 {
-		return token, TokenTypeFunc, ErrorInvalidFuncArgs
+	if len(subMatches) < 2 {
+		// TODO - except PI?
+		return fmt.Errorf("Mismatched submatches count")
 	}
-	args := subMatches[1]
 
-	if ctx.subCtx.currentMode == fieldMode {
-		ctx.lastFieldTokens = make([]string, 0)
-		ctx.subCtx.funcHelperCtx = &funcOutputHelperPair{funcName: funcTranslateTable[ctx.subCtx.lastMatchedFuncKey]}
-		return token, TokenTypeFunc, checkAndParseField(args, &ctx.lastFieldTokens)
-	} else if ctx.subCtx.currentMode == valueMode {
-		ctx.subCtx.funcHelperCtx = &funcOutputHelperPair{funcName: funcTranslateTable[ctx.subCtx.lastMatchedFuncKey],
-			valueMode: true,
-		}
-		// For value, strip the double quotes
-		args = strings.Trim(args, "\"")
-		if valueNumRegex.MatchString(args) {
-			numArg, err := strconv.Atoi(args)
-			if err != nil {
-				return token, TokenTypeFunc, fmt.Errorf("Error converting argument when parsing func argument: %v", err)
-			}
-			ctx.subCtx.funcHelperCtx.value = numArg
+	// Then given the arguments of the functions, populate them
+	fxIdx := helper.lvlMarker
+	for i := 1; i < len(subMatches); i++ {
+		if isFunc, key := helper.recursiveKeyFunc(subMatches[i]); isFunc {
+			nextFuncLvl := helper.makeNewFuncLevel()
+			helper.resolveRecursiveFuncs(subMatches[1], key)
+			helper.args[fxIdx] = append(helper.args[fxIdx], funcRecursiveIdx(nextFuncLvl))
+		} else if delim, ok := valueCheck(subMatches[i]).(string); ok {
+			valueString := strings.TrimPrefix(subMatches[i], delim)
+			valueString = strings.TrimSuffix(valueString, delim)
+			helper.args[fxIdx] = append(helper.args[fxIdx], valueString)
+		} else if isNumericValue, ok := valueCheck(subMatches[i]).(bool); ok && isNumericValue {
+			helper.args[fxIdx] = append(helper.args[fxIdx], subMatches[i])
 		} else {
-			ctx.subCtx.funcHelperCtx.value = args
+			// Field
+			var fieldTokens []string
+			err := checkAndParseField(subMatches[i], &fieldTokens)
+			if err != nil {
+				return err
+			}
+			helper.args[fxIdx] = append(helper.args[fxIdx], fieldTokens)
 		}
-		return token, TokenTypeFunc, nil
+	}
+
+	return nil
+}
+
+func (helper *funcOutputHelper) makeNewFuncLevel() int {
+	helper.lvlMarker = len(helper.args)
+	helper.args = append(helper.args, make([]interface{}, 0))
+	return helper.lvlMarker
+}
+
+// returns a delim string, or true for valueNumRegex match, nor nil if no match
+func valueCheck(token string) interface{} {
+	if valueRegex.MatchString(token) {
+		return `"`
+	} else if valueRegex2.MatchString(token) {
+		return "'"
+	} else if valueNumRegex.MatchString(token) {
+		return true
+	}
+	return nil
+}
+
+func (ctx *expressionParserContext) getFuncFieldTokenHelper(token string) (string, ParseTokenType, error) {
+	if ctx.subCtx.currentMode == fieldMode || ctx.subCtx.currentMode == valueMode {
+		helper := ctx.NewFuncHelper()
+		ctx.subCtx.funcHelperCtx = helper
+		defer helper.resetLevel()
+		return token, TokenTypeFunc, helper.resolveRecursiveFuncs(token, ctx.subCtx.lastMatchedFuncKey)
 	} else {
 		return token, TokenTypeFunc, fmt.Errorf("Error: %v mode is invalid for functions", ctx.subCtx.currentMode.String())
 	}
@@ -1269,10 +1344,10 @@ func (ctx *expressionParserContext) outputFalse() (Expression, error) {
 	return ValueExpr{false}, nil
 }
 
-func (ctx *expressionParserContext) outputValue(node ParserTreeNode) (Expression, error) {
-	var outputData interface{} = node.data
+func outputValueInternal(data interface{}) (Expression, error) {
+	var outputData interface{} = data
 	var err error
-	if strData, ok := node.data.(string); ok && valueNumRegex.MatchString(strData) {
+	if strData, ok := data.(string); ok && valueNumRegex.MatchString(strData) {
 		if intNumRegex.MatchString(strData) {
 			outputData, err = strconv.ParseInt(strData, 10, 64)
 		} else {
@@ -1280,6 +1355,11 @@ func (ctx *expressionParserContext) outputValue(node ParserTreeNode) (Expression
 		}
 	}
 	return ValueExpr{outputData}, err
+
+}
+
+func (ctx *expressionParserContext) outputValue(node ParserTreeNode) (Expression, error) {
+	return outputValueInternal(node.data)
 }
 
 func (ctx *expressionParserContext) outputRegex(node ParserTreeNode) (Expression, error) {
@@ -1294,7 +1374,7 @@ func (ctx *expressionParserContext) outputField(pos int) (Expression, error) {
 	var out FieldExpr
 	path, ok := ctx.fieldTokenPaths[pos]
 	if !ok {
-		return out, fmt.Errorf("Error: Unable to find internally stored field path")
+		return out, ErrorFieldPathNotFound
 	}
 
 	out.Path = path
@@ -1304,21 +1384,47 @@ func (ctx *expressionParserContext) outputField(pos int) (Expression, error) {
 func (ctx *expressionParserContext) outputFunc(pos int) (Expression, error) {
 	var out FuncExpr
 
-	pair, ok := ctx.funcOutputContext[pos]
+	helper, ok := ctx.funcOutputContext[pos]
 	if !ok {
 		return out, fmt.Errorf("Error: Unable to find internally stored function name for outputting")
 	}
-	out.FuncName = pair.funcName
 
-	var subFieldExpr Expression
-	var err error
-	if !pair.valueMode {
-		subFieldExpr, err = ctx.outputField(pos)
-	} else {
-		subFieldExpr, err = ctx.outputValue(NewParserTreeNode(TokenTypeValue, pair.value))
+	curLevel := helper.lvlMarker
+
+	if len(helper.args) <= curLevel || len(helper.args[curLevel]) == 0 {
+		return out, ErrorMalformedFxInternals
 	}
-	out.Params = append(out.Params, subFieldExpr)
-	return out, err
+
+	if _, ok := helper.args[curLevel][0].(string); !ok {
+		return out, ErrorMalformedFxInternals
+	}
+
+	out.FuncName = getOutputFuncName(helper.args[curLevel][0].(string))
+	for i := 1; i < len(helper.args[curLevel]); i++ {
+		if funcIdx, isFunc := helper.args[curLevel][i].(funcRecursiveIdx); isFunc {
+			helper.lvlMarker = int(funcIdx)
+			subFuncExpr, err := ctx.outputFunc(pos)
+			if err != nil {
+				return out, fmt.Errorf("Error: Unable to output subFx: %v", err)
+			}
+			out.Params = append(out.Params, subFuncExpr.(FuncExpr))
+		} else if fieldTokens, isField := helper.args[curLevel][i].([]string); isField {
+			var argField FieldExpr
+			argField.Path = fieldTokens
+			out.Params = append(out.Params, argField)
+		} else if strArg, ok := helper.args[curLevel][i].(string); ok {
+			// value
+			valueExpr, err := outputValueInternal(strArg)
+			if err != nil {
+				return out, fmt.Errorf("Error: Unable to output value: %v", strArg)
+			}
+			out.Params = append(out.Params, valueExpr.(ValueExpr))
+		} else {
+			return out, fmt.Errorf("Error: Invalid internal func: %v", helper.args[curLevel][i])
+		}
+	}
+
+	return out, nil
 }
 
 func (ctx *expressionParserContext) outputOp(node ParserTreeNode, pos int) (Expression, error) {
