@@ -126,7 +126,10 @@ type FuncExpr struct {
 
 func (expr FuncExpr) String() string {
 	rootStr := fmt.Sprintf("func:%s(", expr.FuncName)
-	for _, param := range expr.Params {
+	for i, param := range expr.Params {
+		if i > 0 {
+			rootStr += ","
+		}
 		rootStr += param.String()
 	}
 	rootStr += ")"
