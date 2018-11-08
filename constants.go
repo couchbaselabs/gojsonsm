@@ -9,20 +9,21 @@ import (
 // Function related constants
 const (
 	MathFuncAbs   string = "mathAbs"
-	MathFuncAcos  string = "mathFuncAcos"
-	MathFuncAsin  string = "mathFuncAsin"
-	MathFuncAtan  string = "mathFuncAtan"
+	MathFuncAcos  string = "mathAcos"
+	MathFuncAsin  string = "mathAsin"
+	MathFuncAtan  string = "mathAtan"
 	MathFuncCeil  string = "mathCeil"
 	MathFuncCos   string = "mathCos"
-	MathFuncExp   string = "mathFuncExp"
-	MathFuncFloor string = "mathFuncFloor"
-	MathFuncLog   string = "mathFuncLog"
-	MathFuncLn    string = "mathFuncLn"
+	MathFuncExp   string = "mathExp"
+	MathFuncFloor string = "mathFloor"
+	MathFuncLog   string = "mathLog"
+	MathFuncLn    string = "mathLn"
+	MathFuncPi    string = "mathPi"
+	MathFuncPow   string = "mathPow"
 	MathFuncRound string = "mathRound"
 	MathFuncSin   string = "mathSin"
 	MathFuncSqrt  string = "mathSqrt"
 	MathFuncTan   string = "mathTan"
-	MathFuncPow   string = "mathPow"
 )
 
 // Parser related constants

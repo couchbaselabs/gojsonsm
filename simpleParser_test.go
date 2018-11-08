@@ -2066,6 +2066,31 @@ func TestParserExpressionOutputArrayEqualsMissing(t *testing.T) {
 	assert.False(match)
 }
 
+//func TestParserPlayground(t *testing.T) {
+//	assert := assert.New(t)
+//
+//	matchJson := []byte(`
+//		["lessthan",
+//			["func", "mathPi"],
+//			["value", 0]
+//		]`)
+//
+//	jsonExpr, err := ParseJsonExpression(matchJson)
+//	assert.Nil(err)
+//
+//	strExpr := "PI() <  0"
+//	ctx, err := NewExpressionParserCtx(strExpr)
+//	assert.Nil(err)
+//
+//	err = ctx.parse()
+//	assert.Nil(err)
+//
+//	simpleExpr, err := ctx.outputExpression()
+//	assert.Nil(err)
+//
+//	assert.Equal(jsonExpr.String(), simpleExpr.String())
+//}
+
 func TestParserExpressionMathRoundValues(t *testing.T) {
 	assert := assert.New(t)
 
@@ -2153,20 +2178,7 @@ func TestParserExpressionMathRoundValues2(t *testing.T) {
 func TestParserBunchaMathFuncs(t *testing.T) {
 	assert := assert.New(t)
 
-	matchJson := []byte(`
-		["equals",
-		    ["func", "mathPow",
-		        ["field", "squaredNum"],
-			    ["value", 2]
-			],
-			["value", 16]
-		]`)
-
-	jsonExpr, err := ParseJsonExpression(matchJson)
-	assert.Nil(err)
-
-	strExpr := "POWER(squaredNum,2) == 16"
-	//	strExpr := "ABS(negNum) ==  5 && SQRT(squaredNum) > 1"
+	strExpr := "ABS(negNum) ==  5 && SQRT(squaredNum) > 1 && POWER(squaredNum,2) == 16 && negNum < PI()"
 	ctx, err := NewExpressionParserCtx(strExpr)
 	assert.Nil(err)
 
@@ -2175,8 +2187,6 @@ func TestParserBunchaMathFuncs(t *testing.T) {
 
 	simpleExpr, err := ctx.outputExpression()
 	assert.Nil(err)
-
-	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
 	var trans Transformer
 	matchDef := trans.Transform([]Expression{simpleExpr})
