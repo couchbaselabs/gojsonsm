@@ -508,6 +508,18 @@ func (opCtx *opTokenContext) clear() {
 	}
 }
 
+// returns a delim string, or true for valueNumRegex match, nor nil if no match
+func valueCheck(token string) interface{} {
+	if valueRegex.MatchString(token) {
+		return `"`
+	} else if valueRegex2.MatchString(token) {
+		return "'"
+	} else if valueNumRegex.MatchString(token) {
+		return true
+	}
+	return nil
+}
+
 func (ctx *expressionParserContext) advanceToken() error {
 	ctx.currentTokenIndex++
 
@@ -813,66 +825,6 @@ func (ctx *expressionParserContext) NewFuncHelper() *funcOutputHelper {
 		builtInFuncRegex: ctx.builtInFuncRegex,
 	}
 	return helper
-}
-
-func (helper *funcOutputHelper) resetLevel() {
-	helper.lvlMarker = 0
-}
-
-func (helper *funcOutputHelper) resolveRecursiveFuncs(token string, lastFunc string) error {
-	regex, ok := helper.builtInFuncRegex[lastFunc]
-	if !ok {
-		return ErrorNotFound
-	}
-
-	// First set the function name
-	helper.args[helper.lvlMarker] = append(helper.args[helper.lvlMarker], lastFunc)
-
-	subMatches := regex.FindStringSubmatch(token)
-
-	// Then given the arguments of the functions, populate them if there are any
-	fxIdx := helper.lvlMarker
-	for i := 1; i < len(subMatches); i++ {
-		if isFunc, key := helper.recursiveKeyFunc(subMatches[i]); isFunc {
-			nextFuncLvl := helper.makeNewFuncLevel()
-			helper.resolveRecursiveFuncs(subMatches[1], key)
-			helper.args[fxIdx] = append(helper.args[fxIdx], funcRecursiveIdx(nextFuncLvl))
-		} else if delim, ok := valueCheck(subMatches[i]).(string); ok {
-			valueString := strings.TrimPrefix(subMatches[i], delim)
-			valueString = strings.TrimSuffix(valueString, delim)
-			helper.args[fxIdx] = append(helper.args[fxIdx], valueString)
-		} else if isNumericValue, ok := valueCheck(subMatches[i]).(bool); ok && isNumericValue {
-			helper.args[fxIdx] = append(helper.args[fxIdx], subMatches[i])
-		} else {
-			// Field
-			var fieldTokens []string
-			err := checkAndParseField(subMatches[i], &fieldTokens)
-			if err != nil {
-				return err
-			}
-			helper.args[fxIdx] = append(helper.args[fxIdx], fieldTokens)
-		}
-	}
-
-	return nil
-}
-
-func (helper *funcOutputHelper) makeNewFuncLevel() int {
-	helper.lvlMarker = len(helper.args)
-	helper.args = append(helper.args, make([]interface{}, 0))
-	return helper.lvlMarker
-}
-
-// returns a delim string, or true for valueNumRegex match, nor nil if no match
-func valueCheck(token string) interface{} {
-	if valueRegex.MatchString(token) {
-		return `"`
-	} else if valueRegex2.MatchString(token) {
-		return "'"
-	} else if valueNumRegex.MatchString(token) {
-		return true
-	}
-	return nil
 }
 
 func (ctx *expressionParserContext) getFuncFieldTokenHelper(token, funcKey string) (string, ParseTokenType, error) {
@@ -1701,6 +1653,54 @@ func (ctx *expressionParserContext) outputExpression() (Expression, error) {
 	}
 
 	return ctx.outputOp(node, ctx.treeHeadIndex)
+}
+
+func (helper *funcOutputHelper) resetLevel() {
+	helper.lvlMarker = 0
+}
+
+func (helper *funcOutputHelper) resolveRecursiveFuncs(token string, lastFunc string) error {
+	regex, ok := helper.builtInFuncRegex[lastFunc]
+	if !ok {
+		return ErrorNotFound
+	}
+
+	// First set the function name
+	helper.args[helper.lvlMarker] = append(helper.args[helper.lvlMarker], lastFunc)
+
+	subMatches := regex.FindStringSubmatch(token)
+
+	// Then given the arguments of the functions, populate them if there are any
+	fxIdx := helper.lvlMarker
+	for i := 1; i < len(subMatches); i++ {
+		if isFunc, key := helper.recursiveKeyFunc(subMatches[i]); isFunc {
+			nextFuncLvl := helper.makeNewFuncLevel()
+			helper.resolveRecursiveFuncs(subMatches[1], key)
+			helper.args[fxIdx] = append(helper.args[fxIdx], funcRecursiveIdx(nextFuncLvl))
+		} else if delim, ok := valueCheck(subMatches[i]).(string); ok {
+			valueString := strings.TrimPrefix(subMatches[i], delim)
+			valueString = strings.TrimSuffix(valueString, delim)
+			helper.args[fxIdx] = append(helper.args[fxIdx], valueString)
+		} else if isNumericValue, ok := valueCheck(subMatches[i]).(bool); ok && isNumericValue {
+			helper.args[fxIdx] = append(helper.args[fxIdx], subMatches[i])
+		} else {
+			// Field
+			var fieldTokens []string
+			err := checkAndParseField(subMatches[i], &fieldTokens)
+			if err != nil {
+				return err
+			}
+			helper.args[fxIdx] = append(helper.args[fxIdx], fieldTokens)
+		}
+	}
+
+	return nil
+}
+
+func (helper *funcOutputHelper) makeNewFuncLevel() int {
+	helper.lvlMarker = len(helper.args)
+	helper.args = append(helper.args, make([]interface{}, 0))
+	return helper.lvlMarker
 }
 
 // MAIN
