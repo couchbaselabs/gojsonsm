@@ -111,7 +111,3 @@ func FastValMathFloor(val FastVal) FastVal {
 func FastValMathPow(val, val1 FastVal) FastVal {
 	return genericFastVal2FloatsOp(val, val1, math.Pow)
 }
-
-func FastValMathPi() FastVal {
-	return NewFloatFastVal(math.Pi)
-}

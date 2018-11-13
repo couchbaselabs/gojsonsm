@@ -4,6 +4,7 @@ package gojsonsm
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -81,6 +82,13 @@ var func0VarTranslateTable map[string]string = map[string]string{
 // Two variables function patterns
 var func2VarsTranslateTable map[string]string = map[string]string{
 	"POWER": MathFuncPow,
+}
+
+func funcIsConstantType(fxName string) (bool, interface{}) {
+	if fxName == MathFuncPi {
+		return true, float64(math.Pi)
+	}
+	return false, nil
 }
 
 func getOutputFuncName(userInput string) string {
@@ -1356,6 +1364,12 @@ func (ctx *expressionParserContext) outputFunc(pos int) (Expression, error) {
 	}
 
 	out.FuncName = getOutputFuncName(helper.args[curLevel][0].(string))
+
+	// For constants, just return a plain value to speed up the match execution
+	if isConst, val := funcIsConstantType(out.FuncName); isConst && len(helper.args[curLevel]) == 1 {
+		return outputValueInternal(val)
+	}
+
 	for i := 1; i < len(helper.args[curLevel]); i++ {
 		if funcIdx, isFunc := helper.args[curLevel][i].(funcRecursiveIdx); isFunc {
 			helper.lvlMarker = int(funcIdx)
