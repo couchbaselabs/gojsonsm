@@ -70,7 +70,8 @@ func TestContextParserToken(t *testing.T) {
 	// )
 	_, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeEndParen))
-	assert.Nil(err)
+	// Comment out because we're not inserting the op, which handleClose will throw an err
+	//	assert.Nil(err)
 	ctx.advanceToken()
 
 	// ||
@@ -93,7 +94,8 @@ func TestContextParserToken(t *testing.T) {
 	// )
 	_, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeEndParen))
-	assert.Nil(err)
+	// Comment out because we're not inserting the op, which handleClose will throw an err
+	//	assert.Nil(err)
 	ctx.advanceToken()
 
 	// ||
@@ -708,7 +710,7 @@ func TestContextParserWSValues2(t *testing.T) {
 	// )
 	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal((ParseTokenType)(TokenTypeEndParen), tokenType)
-	assert.Nil(err)
+	// Comment out because we're not inserting the op, which handleClose will throw an err
 	ctx.advanceToken()
 
 	// &&
@@ -1770,26 +1772,6 @@ func TestSimpleParserParenMismatch3(t *testing.T) {
 	assert.Equal(ErrorParenMismatch, err)
 }
 
-func TestSimpleParserParenSyntaxErr(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "(aField)> 3"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.NotNil(err)
-}
-
-func TestSimpleParserParenSyntaxErr2(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "(someField == true)&& true"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.NotNil(err)
-}
-
 func TestSimpleParserNoBacktickBegin(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1851,16 +1833,6 @@ func TestSimpleParserNeg4(t *testing.T) {
 	assert.NotNil(err)
 }
 
-func TestSimpleParserNeg5(t *testing.T) {
-	assert := assert.New(t)
-
-	testString := "( true)&&( false)"
-	ctx, err := NewExpressionParserCtx(testString)
-	assert.Equal(fieldMode, ctx.subCtx.currentMode)
-	err = ctx.parse()
-	assert.NotNil(err)
-}
-
 func TestSimpleParserNeg6(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1878,7 +1850,7 @@ func TestSimpleParserNeg7(t *testing.T) {
 	ctx, err := NewExpressionParserCtx(testString)
 	assert.Equal(fieldMode, ctx.subCtx.currentMode)
 	err = ctx.parse()
-	assert.Equal(ErrorParenWSpace, err)
+	assert.Equal(ErrorMalformedParenthesis, err)
 }
 
 func TestSimpleParserNeg8(t *testing.T) {
@@ -2205,4 +2177,229 @@ func TestParserBunchaMathFuncs(t *testing.T) {
 	match, err := m.Match(udMarsh)
 	assert.Nil(err)
 	assert.True(match)
+}
+
+func TestParserExpressionRecursiveFuncs(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+		["equals",
+		    ["func", "mathRound",
+	            ["func", "mathAbs",
+	                ["field", "number"]
+	            ]
+			],
+			["value", 5]
+		]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+
+	strExpr := "ROUND(ABS(number)) ==  5"
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{jsonExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+}
+
+func TestParserExpressionReAnalyzeToken(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "something>1"
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	check1, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	strExpr2 := "something > 1"
+	ctx2, err := NewExpressionParserCtx(strExpr2)
+	assert.Nil(err)
+
+	err = ctx2.parse()
+	assert.Nil(err)
+
+	check2, err := ctx2.outputExpression()
+	assert.Nil(err)
+
+	assert.Equal(check2.String(), check1.String())
+}
+
+func TestParserExpressionReAnalyzeToken2(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "ABS(geo.latitude)>0&&geo.name=\"US\""
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	check1, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	strExpr2 := "ABS(geo.latitude) > 0 && geo.name = \"US\""
+	ctx2, err := NewExpressionParserCtx(strExpr2)
+	assert.Nil(err)
+
+	err = ctx2.parse()
+	assert.Nil(err)
+
+	check2, err := ctx2.outputExpression()
+	assert.Nil(err)
+
+	assert.Equal(check2.String(), check1.String())
+}
+
+func TestParserExpressionReAnalyzeToken3(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "(aField>5)&&true"
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	check1, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	strExpr2 := "(aField > 5) && true"
+	ctx2, err := NewExpressionParserCtx(strExpr2)
+	assert.Nil(err)
+
+	err = ctx2.parse()
+	assert.Nil(err)
+
+	check2, err := ctx2.outputExpression()
+	assert.Nil(err)
+
+	assert.Equal(check2.String(), check1.String())
+}
+
+func TestParserExpressionReAnalyzeToken4(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "(someField == true)&& true"
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	check1, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	strExpr2 := "(someField == true) && true"
+	ctx2, err := NewExpressionParserCtx(strExpr2)
+	assert.Nil(err)
+
+	err = ctx2.parse()
+	assert.Nil(err)
+
+	check2, err := ctx2.outputExpression()
+	assert.Nil(err)
+
+	assert.Equal(check2.String(), check1.String())
+}
+
+func TestParserExpressionReAnalyzeToken5(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "(true)&&(var==1)"
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	check1, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	strExpr2 := "( true ) && ( var == 1 )"
+	ctx2, err := NewExpressionParserCtx(strExpr2)
+	assert.Nil(err)
+
+	err = ctx2.parse()
+	assert.Nil(err)
+
+	check2, err := ctx2.outputExpression()
+	assert.Nil(err)
+
+	assert.Equal(check2.String(), check1.String())
+}
+
+func TestOpSeeker(t *testing.T) {
+	assert := assert.New(t)
+
+	seeker := NewOpSeeker("something>=1")
+	assert.True(seeker.Seek())
+
+	assert.Equal(">=", seeker.opMatched)
+}
+
+func TestOpSeeker2(t *testing.T) {
+	assert := assert.New(t)
+
+	seeker := NewOpSeeker("something>")
+	assert.True(seeker.Seek())
+
+	assert.Equal(">", seeker.opMatched)
+}
+
+func TestOpSeeker3(t *testing.T) {
+	assert := assert.New(t)
+
+	seeker := NewOpSeeker(">=1")
+	assert.True(seeker.Seek())
+
+	assert.Equal(">=", seeker.opMatched)
+}
+
+func TestOpSeeker4(t *testing.T) {
+	assert := assert.New(t)
+
+	seeker := NewOpSeeker("something>=1&&")
+	assert.True(seeker.Seek())
+
+	assert.Equal(">=", seeker.opMatched)
+}
+
+func TestSpliter(t *testing.T) {
+	assert := assert.New(t)
+
+	ss := StringSplitFirstInst("something>1>3", ">")
+	assert.Equal(3, len(ss))
+	assert.Equal("something", ss[0])
+	assert.Equal(">", ss[1])
+	assert.Equal("1>3", ss[2])
+
+	ss = StringSplitFirstInst("&&noSpace", "&&")
+	assert.Equal(2, len(ss))
+	assert.Equal("&&", ss[0])
+	assert.Equal("noSpace", ss[1])
+
+	ss = StringSplitFirstInst("&&", "&&")
+	assert.Equal(1, len(ss))
+	assert.Equal("&&", ss[0])
+
+	ss = StringSplitFirstInst("something||", "||")
+	assert.Equal(2, len(ss))
+	assert.Equal("something", ss[0])
+	assert.Equal("||", ss[1])
+
 }
