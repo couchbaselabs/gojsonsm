@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -35,6 +36,7 @@ const (
 	FalseValue
 	ArrayValue
 	ObjectValue
+	TimeValue
 )
 
 type FastVal struct {
@@ -84,6 +86,8 @@ func (val FastVal) String() string {
 	case ObjectValue:
 		// TODO: Implement array value stringification
 		return "??OBJECT??"
+	case TimeValue:
+		return val.AsTime().String()
 	}
 
 	panic("unexpected data type")
@@ -140,6 +144,10 @@ func (val FastVal) IsString() bool {
 	return val.dataType == StringValue ||
 		val.dataType == BinStringValue ||
 		val.dataType == JsonStringValue
+}
+
+func (val FastVal) IsTime() bool {
+	return val.dataType == TimeValue
 }
 
 func (val FastVal) GetInt() int64 {
@@ -243,6 +251,14 @@ func (val FastVal) AsRegex() FastValRegexIface {
 	return nil
 }
 
+func (val FastVal) AsTime() *time.Time {
+	switch val.dataType {
+	case TimeValue:
+		return val.data.(*time.Time)
+	}
+	return nil
+}
+
 func (val FastVal) ToBinString() (FastVal, error) {
 	switch val.dataType {
 	case StringValue:
@@ -334,6 +350,19 @@ func (val FastVal) compareStrings(other FastVal) int {
 	return strings.Compare(string(escVal.sliceData), string(escOval.sliceData))
 }
 
+func (val FastVal) compareTime(other FastVal) int {
+	thisTime := val.AsTime()
+	otherTime := other.AsTime()
+
+	if thisTime.Equal(*otherTime) {
+		return 0
+	} else if thisTime.After(*otherTime) {
+		return 1
+	} else {
+		return -1
+	}
+}
+
 func (val FastVal) Compare(other FastVal) int {
 	switch val.dataType {
 	case IntValue:
@@ -358,6 +387,8 @@ func (val FastVal) Compare(other FastVal) int {
 		return val.compareBoolean(other)
 	case FalseValue:
 		return val.compareBoolean(other)
+	case TimeValue:
+		return val.compareTime(other)
 	}
 
 	if val.dataType < other.dataType {
@@ -424,6 +455,8 @@ func NewFastVal(val interface{}) FastVal {
 		return NewRegexpFastVal(val)
 	case PcreWrapperInterface:
 		return NewPcreFastVal(val)
+	case *time.Time:
+		return NewTimeFastVal(val)
 	case nil:
 		return NewNullFastVal()
 	}
@@ -547,6 +580,14 @@ func NewRegexpFastVal(value *regexp.Regexp) FastVal {
 func NewPcreFastVal(value PcreWrapperInterface) FastVal {
 	val := FastVal{
 		dataType: PcreValue,
+		data:     value,
+	}
+	return val
+}
+
+func NewTimeFastVal(value *time.Time) FastVal {
+	val := FastVal{
+		dataType: TimeValue,
 		data:     value,
 	}
 	return val

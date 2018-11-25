@@ -65,6 +65,7 @@ var funcTranslateTable map[string]string = map[string]string{
 	"ATAN":  MathFuncAtan,
 	"CEIL":  MathFuncCeil,
 	"COS":   MathFuncCos,
+	"DATE":  DateFunc,
 	"EXP":   MathFuncExp,
 	"FLOOR": MathFuncFloor,
 	"LOG":   MathFuncLog,

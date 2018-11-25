@@ -282,6 +282,12 @@ func parseJsonRegex(data []interface{}) (Expression, error) {
 	}, nil
 }
 
+func parseJsonTime(data []interface{}) (Expression, error) {
+	return TimeExpr{
+		data[1],
+	}, nil
+}
+
 func parseJsonSubexpr(data []interface{}) (Expression, error) {
 	exprType, ok := data[0].(string)
 	if !ok {
@@ -328,6 +334,8 @@ func parseJsonSubexpr(data []interface{}) (Expression, error) {
 		return parseJsonLike(data)
 	case "regex":
 		return parseJsonRegex(data)
+	case "time":
+		return parseJsonTime(data)
 	}
 
 	return nil, errors.New("invalid expression type")
