@@ -8,6 +8,7 @@ import (
 
 // Function related constants
 const (
+	DateFunc      string = "date"
 	MathFuncAbs   string = "mathAbs"
 	MathFuncAcos  string = "mathAcos"
 	MathFuncAsin  string = "mathAsin"

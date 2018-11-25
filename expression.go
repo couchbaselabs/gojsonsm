@@ -43,6 +43,14 @@ func (expr ValueExpr) String() string {
 	return fmt.Sprintf("%v", expr.Value)
 }
 
+type TimeExpr struct {
+	Time interface{}
+}
+
+func (expr TimeExpr) String() string {
+	return fmt.Sprintf("%v", expr.Time)
+}
+
 type RegexExpr struct {
 	Regex interface{}
 }

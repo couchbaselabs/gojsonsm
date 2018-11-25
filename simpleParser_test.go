@@ -679,7 +679,7 @@ func TestContextParserWSValues(t *testing.T) {
 
 func TestContextParserWSValues2(t *testing.T) {
 	assert := assert.New(t)
-	testString := `(company.name ==  "Amgen Inc") && true`
+	testString := `(company.name ==  "Amgen Inc") && DATE(\"2018-01-01T00:01:02Z\") EXISTS`
 	ctx, err := NewExpressionParserCtx(testString)
 
 	// (
@@ -718,7 +718,19 @@ func TestContextParserWSValues2(t *testing.T) {
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
 	assert.Equal("&&", token)
 	assert.Nil(err)
+
+	// DATE(value)
 	ctx.advanceToken()
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal((ParseTokenType)(TokenTypeFunc), tokenType)
+	// Comment out because we're not inserting the op, which handleClose will throw an err
+	ctx.advanceToken()
+
+	// exists
+	token, tokenType, err = ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
+	assert.Equal("EXISTS", token)
+	assert.Nil(err)
 
 }
 
@@ -2427,4 +2439,75 @@ func TestSpliter(t *testing.T) {
 	assert.Equal("something", ss[0])
 	assert.Equal("||", ss[1])
 
+}
+
+func TestParserDateFunc(t *testing.T) {
+	assert := assert.New(t)
+
+	matchJson := []byte(`
+	["equals",
+		["func", "date",
+			["field", "transactionDate"]
+		],
+		["func", "date",
+			["time", "2018-01-02T03:04:05Z"]
+		]
+	]`)
+
+	jsonExpr, err := ParseJsonExpression(matchJson)
+	assert.Nil(err)
+
+	strExpr := "DATE(transactionDate) =  DATE(\"2018-01-02T03:04:05Z\")"
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{jsonExpr})
+	assert.NotNil(matchDef)
+
+	assert.Equal(jsonExpr.String(), simpleExpr.String())
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"transactionDate": "2018-01-02T03:04:05Z",
+	}
+
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+}
+
+func TestParserDateFunc2(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "DATE(transactionDate) <  DATE(\"2018-01-02T03:04:05Z\")"
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"transactionDate": "2017-01-02T03:04:05Z",
+	}
+
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
 }

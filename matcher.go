@@ -153,6 +153,9 @@ func (m *Matcher) resolveFunc(fn FuncRef, activeLit *FastVal) FastVal {
 		p1 := m.resolveParam(fn.Params[0], activeLit)
 		p2 := m.resolveParam(fn.Params[1], activeLit)
 		return FastValMathPow(p1, p2)
+	case DateFunc:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValDateFunc(p1)
 	default:
 		panic(fmt.Sprintf("encountered unexpected function name: %v", fn.FuncName))
 	}
@@ -186,6 +189,7 @@ func (m *Matcher) matchOp(op *OpNode, litVal *FastVal) error {
 		return nil
 	}
 
+	// TODO - what to do if it's a time val?
 	lhsVal := NewMissingFastVal()
 	if op.Lhs != nil {
 		lhsVal = m.resolveParam(op.Lhs, litVal)

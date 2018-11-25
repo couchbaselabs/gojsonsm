@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type resolvedFieldRef struct {
@@ -324,6 +325,9 @@ func (t *Transformer) makeDataRefRecurse(expr Expression, context nodeRef, isRoo
 			FuncName: expr.FuncName,
 			Params:   params,
 		}, nil
+	case TimeExpr:
+		timeVal, err := time.Parse(time.RFC3339, expr.Time.(string))
+		return NewFastVal(&timeVal), err
 	}
 
 	return nil, errors.New("unsupported expression in parameter")
