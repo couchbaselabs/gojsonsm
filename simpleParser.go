@@ -59,21 +59,21 @@ var fieldIndexNoLeadingZero *regexp.Regexp = regexp.MustCompile(`[^0][0-9]+`)
 
 // Functions patterns
 var funcTranslateTable map[string]string = map[string]string{
-	"ABS":   MathFuncAbs,
-	"ACOS":  MathFuncAcos,
-	"ASIN":  MathFuncAsin,
-	"ATAN":  MathFuncAtan,
-	"CEIL":  MathFuncCeil,
-	"COS":   MathFuncCos,
-	"DATE":  DateFunc,
-	"EXP":   MathFuncExp,
-	"FLOOR": MathFuncFloor,
-	"LOG":   MathFuncLog,
-	"LN":    MathFuncLn,
-	"SIN":   MathFuncSin,
-	"TAN":   MathFuncTan,
-	"ROUND": MathFuncRound,
-	"SQRT":  MathFuncSqrt,
+	"ABS":          MathFuncAbs,
+	"ACOS":         MathFuncAcos,
+	"ASIN":         MathFuncAsin,
+	"ATAN":         MathFuncAtan,
+	"CEIL":         MathFuncCeil,
+	"COS":          MathFuncCos,
+	DateFuncParser: DateFunc,
+	"EXP":          MathFuncExp,
+	"FLOOR":        MathFuncFloor,
+	"LOG":          MathFuncLog,
+	"LN":           MathFuncLn,
+	"SIN":          MathFuncSin,
+	"TAN":          MathFuncTan,
+	"ROUND":        MathFuncRound,
+	"SQRT":         MathFuncSqrt,
 }
 
 var func0VarTranslateTable map[string]string = map[string]string{
@@ -1696,6 +1696,9 @@ func (helper *funcOutputHelper) resolveRecursiveFuncs(token string, lastFunc str
 			valueString := strings.TrimPrefix(subMatches[i], delim)
 			valueString = strings.TrimSuffix(valueString, delim)
 			helper.args[fxIdx] = append(helper.args[fxIdx], valueString)
+			if lastFunc == DateFuncParser && !validTimeChecker(valueString) {
+				return ErrorInvalidTimeFormat
+			}
 		} else if isNumericValue, ok := valueCheck(subMatches[i]).(bool); ok && isNumericValue {
 			helper.args[fxIdx] = append(helper.args[fxIdx], subMatches[i])
 		} else {

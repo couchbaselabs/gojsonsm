@@ -8,23 +8,24 @@ import (
 
 // Function related constants
 const (
-	DateFunc      string = "date"
-	MathFuncAbs   string = "mathAbs"
-	MathFuncAcos  string = "mathAcos"
-	MathFuncAsin  string = "mathAsin"
-	MathFuncAtan  string = "mathAtan"
-	MathFuncCeil  string = "mathCeil"
-	MathFuncCos   string = "mathCos"
-	MathFuncExp   string = "mathExp"
-	MathFuncFloor string = "mathFloor"
-	MathFuncLog   string = "mathLog"
-	MathFuncLn    string = "mathLn"
-	MathFuncPi    string = "mathPi"
-	MathFuncPow   string = "mathPow"
-	MathFuncRound string = "mathRound"
-	MathFuncSin   string = "mathSin"
-	MathFuncSqrt  string = "mathSqrt"
-	MathFuncTan   string = "mathTan"
+	DateFunc       string = "date"
+	DateFuncParser string = "DATE"
+	MathFuncAbs    string = "mathAbs"
+	MathFuncAcos   string = "mathAcos"
+	MathFuncAsin   string = "mathAsin"
+	MathFuncAtan   string = "mathAtan"
+	MathFuncCeil   string = "mathCeil"
+	MathFuncCos    string = "mathCos"
+	MathFuncExp    string = "mathExp"
+	MathFuncFloor  string = "mathFloor"
+	MathFuncLog    string = "mathLog"
+	MathFuncLn     string = "mathLn"
+	MathFuncPi     string = "mathPi"
+	MathFuncPow    string = "mathPow"
+	MathFuncRound  string = "mathRound"
+	MathFuncSin    string = "mathSin"
+	MathFuncSqrt   string = "mathSqrt"
+	MathFuncTan    string = "mathTan"
 )
 
 // Parser related constants
@@ -44,6 +45,7 @@ var ErrorMissingQuote error = fmt.Errorf("Invalid token - could not find matchin
 var ErrorEmptyLiteral error = fmt.Errorf("Literals cannot be empty")
 var ErrorEmptyToken error = fmt.Errorf("Token cannot be empty")
 var ErrorInvalidFuncArgs error = fmt.Errorf("Unable to parse arguments to specified built in function")
+var ErrorInvalidTimeFormat error = fmt.Errorf("Invalid given time format")
 var ErrorPcreNotSupported error = fmt.Errorf("Error: Current instance of gojsonsm does not have native PCRE support compiled")
 var ErrorFieldPathNotFound error = fmt.Errorf("Error: Unable to find internally stored field path")
 var ErrorMalformedFxInternals error = fmt.Errorf("Error: Malformed internal function helper")

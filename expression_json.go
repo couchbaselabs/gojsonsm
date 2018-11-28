@@ -283,6 +283,9 @@ func parseJsonRegex(data []interface{}) (Expression, error) {
 }
 
 func parseJsonTime(data []interface{}) (Expression, error) {
+	if dateStr, ok := data[1].(string); ok && !validTimeChecker(dateStr) {
+		return nil, ErrorInvalidTimeFormat
+	}
 	return TimeExpr{
 		data[1],
 	}, nil

@@ -189,7 +189,6 @@ func (m *Matcher) matchOp(op *OpNode, litVal *FastVal) error {
 		return nil
 	}
 
-	// TODO - what to do if it's a time val?
 	lhsVal := NewMissingFastVal()
 	if op.Lhs != nil {
 		lhsVal = m.resolveParam(op.Lhs, litVal)
