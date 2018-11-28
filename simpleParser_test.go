@@ -2511,3 +2511,50 @@ func TestParserDateFunc2(t *testing.T) {
 	assert.Nil(err)
 	assert.True(match)
 }
+
+func TestParserIso8601(t *testing.T) {
+	assert := assert.New(t)
+
+	yrOnly := "1991"
+	assert.True(iso8601Year.MatchString(yrOnly))
+	assert.False(iso8601YearAndMonth.MatchString(yrOnly))
+	assert.False(iso8601CompleteDate.MatchString(yrOnly))
+
+	yrMonth := "1991-01"
+	assert.False(iso8601Year.MatchString(yrMonth))
+	assert.True(iso8601YearAndMonth.MatchString(yrMonth))
+	assert.False(iso8601CompleteDate.MatchString(yrMonth))
+
+	yrMonthDate := "1991-01-23"
+	assert.False(iso8601Year.MatchString(yrMonthDate))
+	assert.False(iso8601YearAndMonth.MatchString(yrMonthDate))
+	assert.True(iso8601CompleteDate.MatchString(yrMonthDate))
+}
+
+func TestParserDateFunc3(t *testing.T) {
+	assert := assert.New(t)
+
+	strExpr := "DATE(transactionDate) <  DATE(\"2018-01-02\")"
+	ctx, err := NewExpressionParserCtx(strExpr)
+	assert.Nil(err)
+
+	err = ctx.parse()
+	assert.Nil(err)
+
+	simpleExpr, err := ctx.outputExpression()
+	assert.Nil(err)
+
+	var trans Transformer
+	matchDef := trans.Transform([]Expression{simpleExpr})
+	assert.NotNil(matchDef)
+
+	m := NewMatcher(matchDef)
+	userData := map[string]interface{}{
+		"transactionDate": "2017-01-02",
+	}
+
+	udMarsh, _ := json.Marshal(userData)
+	match, err := m.Match(udMarsh)
+	assert.Nil(err)
+	assert.True(match)
+}
