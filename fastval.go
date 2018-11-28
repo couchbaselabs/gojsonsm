@@ -87,7 +87,7 @@ func (val FastVal) String() string {
 		// TODO: Implement array value stringification
 		return "??OBJECT??"
 	case TimeValue:
-		return val.AsTime().String()
+		return val.GetTime().String()
 	}
 
 	panic("unexpected data type")
@@ -160,6 +160,10 @@ func (val FastVal) GetUint() uint64 {
 
 func (val FastVal) GetFloat() float64 {
 	return *(*float64)(unsafe.Pointer(&val.rawData))
+}
+
+func (val FastVal) GetTime() *time.Time {
+	return val.data.(*time.Time)
 }
 
 func (val FastVal) AsInt() int64 {
