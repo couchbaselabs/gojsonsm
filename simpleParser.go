@@ -783,7 +783,7 @@ func (ctx *expressionParserContext) getCurrentToken() (string, ParseTokenType, e
 	} else if found := ctx.checkPotentialSeparation(token); found {
 		return ctx.getAndSeparateToken()
 	} else {
-		return ctx.getTokenFieldTokenHelper(token)
+		return ctx.getTokenFieldTokenHelper()
 	}
 }
 
@@ -848,8 +848,10 @@ func (ctx *expressionParserContext) getFuncFieldTokenHelper(token, funcKey strin
 }
 
 // Checks the syntax of field - i.e. paths, array syntax, etc
-func (ctx *expressionParserContext) getTokenFieldTokenHelper(token string) (string, ParseTokenType, error) {
+func (ctx *expressionParserContext) getTokenFieldTokenHelper() (string, ParseTokenType, error) {
 	var err error
+
+	token := ctx.tokens[ctx.currentTokenIndex]
 
 	// Field name cannot start or end with a period
 	invalidPeriodPosRegex := regexp.MustCompile(`(^\.)|(\.$)`)
@@ -863,106 +865,133 @@ func (ctx *expressionParserContext) getTokenFieldTokenHelper(token string) (stri
 
 	ctx.lastFieldTokens = make([]string, 0)
 
-	return token, TokenTypeField, checkAndParseField(token, &ctx.lastFieldTokens)
+	token, err = checkAndParseField(ctx.tokens, &ctx.currentTokenIndex, &ctx.lastFieldTokens)
+	return token, TokenTypeField, err
 }
 
-func checkAndParseField(token string, subTokens *[]string) error {
-	var pos int
-	var beginPos int
+func checkAndParseField(tokens []string, i *int, subTokens *[]string) (string, error) {
 	var mode checkFieldMode
 	var nextMode checkFieldMode
 	var skipAppend bool
+	var unfinishedField []string
+	var done bool = false
+	var outputToken string
+
+	token := tokens[*i]
 
 	if len(token) == 0 {
-		return ErrorEmptyToken
+		return outputToken, ErrorEmptyToken
 	}
 
-	for ; pos < len(token); pos++ {
+	for !done {
+		var pos int
+		var beginPos int
+		for ; pos < len(token); pos++ {
+			switch mode {
+			case cfmNone:
+				switch string(token[pos]) {
+				case fieldSeparator:
+					if !skipAppend {
+						*subTokens = append(*subTokens, string(token[beginPos:pos]))
+						outputToken = fmt.Sprintf("%s %s", outputToken, string(token[beginPos:pos]))
+					} else {
+						skipAppend = false
+					}
+					beginPos = pos + 1
+				case fieldLiteral:
+					mode = cfmBacktick
+					beginPos = pos + 1
+					nextMode = cfmNone
+				case fieldNestedStart:
+					if !skipAppend {
+						*subTokens = append(*subTokens, string(token[beginPos:pos]))
+						outputToken = fmt.Sprintf("%s %s", outputToken, string(token[beginPos:pos]))
+					} else {
+						skipAppend = false
+					}
+					beginPos = pos
+					mode = cfmNestedNumeric
+				}
+			case cfmBacktick:
+				// Keep going until we find another literal seperator
+				switch string(token[pos]) {
+				case fieldLiteral:
+					if beginPos == pos {
+						return outputToken, ErrorEmptyLiteral
+					}
+					if len(unfinishedField) > 0 {
+						unfinishedField = append(unfinishedField, string(token[beginPos:pos]))
+						*subTokens = append(*subTokens, strings.Join(unfinishedField, " "))
+						outputToken = fmt.Sprintf("%s %s", outputToken, strings.Join(unfinishedField, " "))
+						unfinishedField = make([]string, 0)
+					} else {
+						*subTokens = append(*subTokens, string(token[beginPos:pos]))
+						outputToken = fmt.Sprintf("%s %s", outputToken, string(token[beginPos:pos]))
+					}
+					mode = nextMode
+					if pos != len(token)-1 && (string(token[pos+1]) == fieldSeparator || string(token[pos+1]) == fieldNestedStart) || pos == len(token)-1 {
+						skipAppend = true
+					}
+				}
+			case cfmNestedNumeric:
+				if pos == beginPos {
+					continue
+				}
+				if pos == beginPos+1 && string(token[pos]) == "0" {
+					return outputToken, ErrorLeadingZeroes
+				} else if !fieldTokenInt.MatchString(string(token[pos])) && string(token[pos]) != fieldNestedEnd {
+					return outputToken, ErrorAllInts
+				}
+				switch string(token[pos]) {
+				case fieldNestedEnd:
+					// If nothing was entered between the brackets
+					if pos == beginPos+1 {
+						return outputToken, ErrorEmptyNest
+					}
+
+					// Advance mode to the next, and skip appending if this is the last or is followed by another nest
+					mode = cfmNone
+					if !skipAppend {
+						*subTokens = append(*subTokens, token[beginPos:pos+1])
+						outputToken = fmt.Sprintf("%s %s", string(token[beginPos:pos+1]))
+					} else {
+						skipAppend = false
+					}
+					if pos == len(token)-1 || (pos < len(token)-1 && string(token[pos+1]) == fieldNestedStart) {
+						skipAppend = true
+					}
+				case fieldSeparator:
+					fallthrough
+				case fieldLiteral:
+					// For now, bracket can be used only for array indexing
+					return outputToken, ErrorAllInts
+				}
+			}
+		}
+
+		// Catch any outstanding mismatched backticks or anything else
 		switch mode {
 		case cfmNone:
-			switch string(token[pos]) {
-			case fieldSeparator:
-				if !skipAppend {
-					*subTokens = append(*subTokens, string(token[beginPos:pos]))
-				} else {
-					skipAppend = false
-				}
-				beginPos = pos + 1
-			case fieldLiteral:
-				mode = cfmBacktick
-				beginPos = pos + 1
-				nextMode = cfmNone
-			case fieldNestedStart:
-				if !skipAppend {
-					*subTokens = append(*subTokens, string(token[beginPos:pos]))
-				} else {
-					skipAppend = false
-				}
-				beginPos = pos
-				mode = cfmNestedNumeric
-			}
-		case cfmBacktick:
-			// Keep going until we find another literal seperator
-			switch string(token[pos]) {
-			case fieldLiteral:
-				if beginPos == pos {
-					return ErrorEmptyLiteral
-				}
+			if !skipAppend {
+				// Capture the last string, whatever it is
 				*subTokens = append(*subTokens, string(token[beginPos:pos]))
-				mode = nextMode
-				if pos != len(token)-1 && (string(token[pos+1]) == fieldSeparator || string(token[pos+1]) == fieldNestedStart) || pos == len(token)-1 {
-					skipAppend = true
-				}
+				outputToken = fmt.Sprintf("%s %s", outputToken, string(token[beginPos:pos]))
 			}
+			done = true
 		case cfmNestedNumeric:
-			if pos == beginPos {
-				continue
+			return outputToken, ErrorMissingBacktickBracket
+		case cfmBacktick:
+			// We haven't found the end backtick in this token, go through the next token
+			unfinishedField = append(unfinishedField, string(token[beginPos:pos]))
+			*i = *i + 1
+			if *i >= len(tokens) {
+				return outputToken, ErrorMissingBacktickBracket
 			}
-			if pos == beginPos+1 && string(token[pos]) == "0" {
-				return ErrorLeadingZeroes
-			} else if !fieldTokenInt.MatchString(string(token[pos])) && string(token[pos]) != fieldNestedEnd {
-				return ErrorAllInts
-			}
-			switch string(token[pos]) {
-			case fieldNestedEnd:
-				// If nothing was entered between the brackets
-				if pos == beginPos+1 {
-					return ErrorEmptyNest
-				}
-
-				// Advance mode to the next, and skip appending if this is the last or is followed by another nest
-				mode = cfmNone
-				if !skipAppend {
-					*subTokens = append(*subTokens, token[beginPos:pos+1])
-				} else {
-					skipAppend = false
-				}
-				if pos == len(token)-1 || (pos < len(token)-1 && string(token[pos+1]) == fieldNestedStart) {
-					skipAppend = true
-				}
-			case fieldSeparator:
-				fallthrough
-			case fieldLiteral:
-				// For now, bracket can be used only for array indexing
-				return ErrorAllInts
-			}
+			token = tokens[*i]
 		}
-	}
+	} // !done
 
-	// Catch any outstanding mismatched backticks or anything else
-	switch mode {
-	case cfmNone:
-		if !skipAppend {
-			// Capture the last string, whatever it is
-			*subTokens = append(*subTokens, string(token[beginPos:pos]))
-		}
-	case cfmNestedNumeric:
-		fallthrough
-	case cfmBacktick:
-		return ErrorMissingBacktickBracket
-	}
-
-	return nil
+	return outputToken, nil
 }
 
 func (ctx *expressionParserContext) getErrorNeedToStartNewCtx() error {
@@ -1704,7 +1733,7 @@ func (helper *funcOutputHelper) resolveRecursiveFuncs(token string, lastFunc str
 		} else {
 			// Field
 			var fieldTokens []string
-			err := checkAndParseField(subMatches[i], &fieldTokens)
+			_, err := checkAndParseField(subMatches, &i, &fieldTokens)
 			if err != nil {
 				return err
 			}

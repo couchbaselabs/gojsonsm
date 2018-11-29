@@ -651,6 +651,18 @@ func TestContextParserMatch(t *testing.T) {
 
 }
 
+func TestContextParserWSField(t *testing.T) {
+	assert := assert.New(t)
+	testString := "name.`first and last` ==  \"Neil Huang\""
+	ctx, err := NewExpressionParserCtx(testString)
+
+	// name.`first and last`
+	_, tokenType, err := ctx.getCurrentToken()
+	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
+	assert.Nil(err)
+	ctx.advanceToken()
+}
+
 func TestContextParserWSValues(t *testing.T) {
 	assert := assert.New(t)
 	testString := "name.first ==  \"Amgen Inc\""
@@ -1726,7 +1738,7 @@ func TestParserExpressionOutputIsTrue(t *testing.T) {
 func TestParserExpressionOutputXDCRInternalObj(t *testing.T) {
 	assert := assert.New(t)
 
-	strExpr := "`[XDCRInternal]`.Version > 2.0"
+	strExpr := "`[XDCRInternal with space]`.Version > 2.0"
 
 	ctx, err := NewExpressionParserCtx(strExpr)
 	assert.Nil(err)
@@ -1743,7 +1755,7 @@ func TestParserExpressionOutputXDCRInternalObj(t *testing.T) {
 
 	m := NewMatcher(matchDef)
 	userData := map[string]interface{}{
-		"[XDCRInternal]": map[string]interface{}{
+		"[XDCRInternal with space]": map[string]interface{}{
 			"Version": 3.0,
 		},
 	}
