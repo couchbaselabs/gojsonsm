@@ -50,107 +50,123 @@ func TestContextParserPcreToken(t *testing.T) {
 	ctx, err := NewExpressionParserCtx(testString)
 
 	// name.first
-	_, tokenType, err := ctx.getCurrentToken()
+	token, tokenType, err := ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
 	assert.Nil(err)
 	assert.Equal(2, len(ctx.lastFieldTokens))
 	assert.Equal(ctx.lastFieldTokens[0], "name")
 	assert.Equal(ctx.lastFieldTokens[1], "first")
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// ==
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// "Neil"
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// ||
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// (`age` -- will trim and will auto advance
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeParen))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 
 	// `age`
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
 	assert.Nil(err)
-	//	fmt.Printf("`age` token: %v\n", token)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// <
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// 50)
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeValue))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// )
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeEndParen))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// ||
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// (true -- will trim and auto advance
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeParen))
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	assert.Nil(err)
 
 	// true
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeTrue))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// )
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeEndParen))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// ||
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// SomeStr
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeField))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// LIKE
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypeOperator))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 
 	// a(?<!foo)\
-	_, tokenType, err = ctx.getCurrentToken()
+	token, tokenType, err = ctx.getCurrentToken()
 	assert.Equal(tokenType, (ParseTokenType)(TokenTypePcre))
 	assert.Nil(err)
+	assert.Nil(ctx.insertNode(NewParserTreeNode(tokenType, token)))
 	ctx.advanceToken()
 }
 
