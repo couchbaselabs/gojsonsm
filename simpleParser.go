@@ -66,28 +66,35 @@ var funcTranslateTable map[string]string = map[string]string{
 	"CEIL":         MathFuncCeil,
 	"COS":          MathFuncCos,
 	DateFuncParser: DateFunc,
+	"DEGREES":      MathFuncDegrees,
 	"EXP":          MathFuncExp,
 	"FLOOR":        MathFuncFloor,
 	"LOG":          MathFuncLog,
 	"LN":           MathFuncLn,
 	"SIN":          MathFuncSin,
 	"TAN":          MathFuncTan,
+	"RADIANS":      MathFuncRadians,
 	"ROUND":        MathFuncRound,
 	"SQRT":         MathFuncSqrt,
 }
 
 var func0VarTranslateTable map[string]string = map[string]string{
 	"PI": MathFuncPi,
+	"E":  MathFuncE,
 }
 
 // Two variables function patterns
 var func2VarsTranslateTable map[string]string = map[string]string{
+	"ATAN2": MathFuncAtan2,
 	"POWER": MathFuncPow,
 }
 
 func funcIsConstantType(fxName string) (bool, interface{}) {
-	if fxName == MathFuncPi {
+	switch fxName {
+	case MathFuncPi:
 		return true, float64(math.Pi)
+	case MathFuncE:
+		return true, float64(math.E)
 	}
 	return false, nil
 }
