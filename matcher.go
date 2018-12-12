@@ -119,6 +119,10 @@ func (m *Matcher) resolveFunc(fn FuncRef, activeLit *FastVal) FastVal {
 	case MathFuncAtan:
 		p1 := m.resolveParam(fn.Params[0], activeLit)
 		return FastValMathAtan(p1)
+	case MathFuncAtan2:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		p2 := m.resolveParam(fn.Params[1], activeLit)
+		return FastValMathAtan2(p1, p2)
 	case MathFuncRound:
 		p1 := m.resolveParam(fn.Params[0], activeLit)
 		return FastValMathRound(p1)
@@ -149,6 +153,12 @@ func (m *Matcher) resolveFunc(fn FuncRef, activeLit *FastVal) FastVal {
 	case MathFuncFloor:
 		p1 := m.resolveParam(fn.Params[0], activeLit)
 		return FastValMathFloor(p1)
+	case MathFuncDegrees:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathDegrees(p1)
+	case MathFuncRadians:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathRadians(p1)
 	case MathFuncPow:
 		p1 := m.resolveParam(fn.Params[0], activeLit)
 		p2 := m.resolveParam(fn.Params[1], activeLit)

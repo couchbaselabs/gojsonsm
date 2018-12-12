@@ -13,6 +13,14 @@ func floatMathRound(val float64) float64 {
 	return float64(int(val + 0.5))
 }
 
+var mathDegreeFunc func(float64) float64 = func(rad float64) float64 {
+	return rad * 180 / math.Pi
+}
+
+var mathRadiansFunc func(float64) float64 = func(deg float64) float64 {
+	return deg * math.Pi / 180
+}
+
 func FastValMathRound(val FastVal) FastVal {
 	if val.IsFloat() {
 		originalValue := val.AsFloat()
@@ -110,4 +118,16 @@ func FastValMathFloor(val FastVal) FastVal {
 
 func FastValMathPow(val, val1 FastVal) FastVal {
 	return genericFastVal2FloatsOp(val, val1, math.Pow)
+}
+
+func FastValMathAtan2(val, val1 FastVal) FastVal {
+	return genericFastVal2FloatsOp(val, val1, math.Atan2)
+}
+
+func FastValMathDegrees(val FastVal) FastVal {
+	return genericFastValFloatOp(val, mathDegreeFunc)
+}
+
+func FastValMathRadians(val FastVal) FastVal {
+	return genericFastValFloatOp(val, mathRadiansFunc)
 }
