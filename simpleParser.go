@@ -59,23 +59,23 @@ var fieldIndexNoLeadingZero *regexp.Regexp = regexp.MustCompile(`[^0][0-9]+`)
 
 // Functions patterns
 var funcTranslateTable map[string]string = map[string]string{
-	"ABS":          MathFuncAbs,
-	"ACOS":         MathFuncAcos,
-	"ASIN":         MathFuncAsin,
-	"ATAN":         MathFuncAtan,
-	"CEIL":         MathFuncCeil,
-	"COS":          MathFuncCos,
-	DateFuncParser: DateFunc,
-	"DEGREES":      MathFuncDegrees,
-	"EXP":          MathFuncExp,
-	"FLOOR":        MathFuncFloor,
-	"LOG":          MathFuncLog,
-	"LN":           MathFuncLn,
-	"SIN":          MathFuncSin,
-	"TAN":          MathFuncTan,
-	"RADIANS":      MathFuncRadians,
-	"ROUND":        MathFuncRound,
-	"SQRT":         MathFuncSqrt,
+	FuncAbs:   MathFuncAbs,
+	FuncAcos:  MathFuncAcos,
+	FuncAsin:  MathFuncAsin,
+	FuncAtan:  MathFuncAtan,
+	FuncCeil:  MathFuncCeil,
+	FuncCos:   MathFuncCos,
+	FuncDate:  DateFunc,
+	FuncDeg:   MathFuncDegrees,
+	FuncExp:   MathFuncExp,
+	FuncFloor: MathFuncFloor,
+	FuncLog:   MathFuncLog,
+	FuncLn:    MathFuncLn,
+	FuncSin:   MathFuncSin,
+	FuncTan:   MathFuncTan,
+	FuncRad:   MathFuncRadians,
+	FuncRound: MathFuncRound,
+	FuncSqrt:  MathFuncSqrt,
 }
 
 var func0VarTranslateTable map[string]string = map[string]string{
@@ -85,8 +85,8 @@ var func0VarTranslateTable map[string]string = map[string]string{
 
 // Two variables function patterns
 var func2VarsTranslateTable map[string]string = map[string]string{
-	"ATAN2": MathFuncAtan2,
-	"POWER": MathFuncPow,
+	FuncAtan2: MathFuncAtan2,
+	FuncPower: MathFuncPow,
 }
 
 func funcIsConstantType(fxName string) (bool, interface{}) {
@@ -122,17 +122,6 @@ func getCheckFunc0Pattern(name string) string {
 func getCheckFunc2Pattern(name string) string {
 	return fmt.Sprintf(`^%s\((?P<args>.+), *(?P<args>.+)\)$`, name)
 }
-
-// Support for pcre's lookahead class of regex
-const lookAheadPattern = "\\(\\?\\=.+\\)"
-const lookBehindPattern = "\\(\\?\\<.+\\)"
-const negLookAheadPattern = "\\(\\?\\!.+\\)"
-const negLookBehindPattern = "\\(\\?\\<\\!.+\\)"
-
-var pcreCheckers [4]*regexp.Regexp = [...]*regexp.Regexp{regexp.MustCompile(lookAheadPattern),
-	regexp.MustCompile(lookBehindPattern),
-	regexp.MustCompile(negLookAheadPattern),
-	regexp.MustCompile(negLookBehindPattern)}
 
 type ParserTreeNode struct {
 	tokenType ParseTokenType
@@ -494,16 +483,6 @@ func (ctx *expressionParserContext) tokenIsBuiltInFuncType(token string) (bool, 
 		}
 	}
 	return false, ""
-}
-
-// Returns true if the value is to be used for pcre types
-func tokenIsPcreValueType(token string) bool {
-	for _, pcreChecker := range pcreCheckers {
-		if pcreChecker.MatchString(token) {
-			return true
-		}
-	}
-	return false
 }
 
 func (opCtx opTokenContext) isChainOp() bool {
@@ -1732,7 +1711,7 @@ func (helper *funcOutputHelper) resolveRecursiveFuncs(token string, lastFunc str
 			valueString := strings.TrimPrefix(subMatches[i], delim)
 			valueString = strings.TrimSuffix(valueString, delim)
 			helper.args[fxIdx] = append(helper.args[fxIdx], valueString)
-			if lastFunc == DateFuncParser && !validTimeChecker(valueString) {
+			if lastFunc == FuncDate && !validTimeChecker(valueString) {
 				return ErrorInvalidTimeFormat
 			}
 		} else if isNumericValue, ok := valueCheck(subMatches[i]).(bool); ok && isNumericValue {

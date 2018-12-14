@@ -4,12 +4,12 @@ package gojsonsm
 
 import (
 	"fmt"
+	"regexp"
 )
 
 // Function related constants
 const (
 	DateFunc        string = "date"
-	DateFuncParser  string = "DATE"
 	MathFuncAbs     string = "mathAbs"
 	MathFuncAcos    string = "mathAcos"
 	MathFuncAsin    string = "mathAsin"
@@ -30,11 +30,61 @@ const (
 	MathFuncSin     string = "mathSin"
 	MathFuncSqrt    string = "mathSqrt"
 	MathFuncTan     string = "mathTan"
+
+	FuncAbs    string = "ABS"
+	FuncAcos   string = "ACOS"
+	FuncAsin   string = "ASIN"
+	FuncAtan   string = "ATAN"
+	FuncAtan2  string = "ATAN2"
+	FuncCeil   string = "CEIL"
+	FuncCos    string = "COS"
+	FuncDate   string = "DATE"
+	FuncDeg    string = "DEGREES"
+	FuncExp    string = "EXP"
+	FuncFloor  string = "FLOOR"
+	FuncLog    string = "LOG"
+	FuncLn     string = "LN"
+	FuncPower  string = "POW"
+	FuncRad    string = "RADIANS"
+	FuncRegexp string = "REGEXP_CONTAINS"
+	FuncSin    string = "SIN"
+	FuncTan    string = "TAN"
+	FuncRound  string = "ROUND"
+	FuncSqrt   string = "SQRT"
 )
 
 // Parser related constants
+const (
+	OperatorOr            string = "OR"
+	OperatorAnd           string = "AND"
+	OperatorNot           string = "NOT"
+	OperatorTrue          string = "TRUE"
+	OperatorFalse         string = "FALSE"
+	OperatorMeta          string = "META"
+	OperatorEquals        string = "="
+	OperatorNotEquals     string = "<>"
+	OperatorGreaterThan   string = ">"
+	OperatorGreaterThanEq string = ">="
+	OperatorLessThan      string = "<"
+	OperatorLessThanEq    string = "<="
+	OperatorExists        string = "EXISTS"
+	OperatorMissing       string = "IS MISSING"
+	OperatorNotMissing    string = "IS NOT MISSING"
+	OperatorNull          string = "IS NULL"
+	OperatorNotNull       string = "IS NOT NULL"
+)
+
+// Participle parser can cause stack overflow if certain inputs (i.e. a single word regex) is passed in
+// This slice allows callers to get a list of valid operators that are used, so they can check whether
+// or not a valid expression is valid prior to passing into the FilterExpression Parser
+var GojsonsmOperators []string = []string{OperatorOr, OperatorAnd, OperatorNot, OperatorTrue,
+	OperatorFalse, OperatorMeta, OperatorEquals, OperatorNotEquals, OperatorGreaterThan, OperatorGreaterThanEq,
+	OperatorExists, OperatorMissing, OperatorNotMissing, OperatorNull, OperatorNotNull,
+	/* BooleanFuncs*/ FuncRegexp}
+
 // Error constants
 var emptyExpression Expression
+var ErrorEmptyInput error = fmt.Errorf("Error: Input is empty")
 var ErrorNotFound error = fmt.Errorf("Error: Specified resource was not found")
 var ErrorNoMoreTokens error = fmt.Errorf("Error: No more token found")
 var ErrorNeedToStartOneNewCtx error = fmt.Errorf("Error: Need to spawn one subcontext")
@@ -104,3 +154,24 @@ const (
 type checkAndGetKeyFunc func(string) (bool, string)
 type funcNameType string
 type funcRecursiveIdx int
+
+// Support for pcre's lookahead class of regex
+const lookAheadPattern = "\\(\\?\\=.+\\)"
+const lookBehindPattern = "\\(\\?\\<.+\\)"
+const negLookAheadPattern = "\\(\\?\\!.+\\)"
+const negLookBehindPattern = "\\(\\?\\<\\!.+\\)"
+
+var pcreCheckers [4]*regexp.Regexp = [...]*regexp.Regexp{regexp.MustCompile(lookAheadPattern),
+	regexp.MustCompile(lookBehindPattern),
+	regexp.MustCompile(negLookAheadPattern),
+	regexp.MustCompile(negLookBehindPattern)}
+
+// Returns true if the value is to be used for pcre types
+func tokenIsPcreValueType(token string) bool {
+	for _, pcreChecker := range pcreCheckers {
+		if pcreChecker.MatchString(token) {
+			return true
+		}
+	}
+	return false
+}

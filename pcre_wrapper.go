@@ -30,3 +30,7 @@ func (wrapper *PcreWrapper) Match(b []byte) bool {
 	matcher.Reset(*wrapper.pcreRegex, b, 0)
 	return matcher.Matches()
 }
+
+func MakePcreExpression(expression string) (Expression, error) {
+	return PcreExpr{expression}, nil
+}
