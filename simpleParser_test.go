@@ -2202,7 +2202,7 @@ func TestParserExpressionMathRoundValues2(t *testing.T) {
 func TestParserBunchaMathFuncs(t *testing.T) {
 	assert := assert.New(t)
 
-	strExpr := "ABS(negNum) ==  5 && SQRT(squaredNum) > 1 && POWER(squaredNum,2) == 16 && negNum < PI() && DEGREES(radian) > 171 && DEGREES(radian) < 172"
+	strExpr := "ABS(negNum) ==  5 && SQRT(squaredNum) > 1 && POW(squaredNum,2) == 16 && negNum < PI() && DEGREES(radian) > 171 && DEGREES(radian) < 172"
 	ctx, err := NewExpressionParserCtx(strExpr)
 	assert.Nil(err)
 

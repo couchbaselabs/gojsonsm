@@ -14,3 +14,7 @@ func MakePcreWrapper(expression string) (PcreWrapperInterface, error) {
 func (wrapper *PcreWrapper) Match(b []byte) bool {
 	return false
 }
+
+func MakePcreExpression(expression string) (Expression, error) {
+	return nil, ErrorPcreNotSupported
+}
