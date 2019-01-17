@@ -217,8 +217,6 @@ func (m *Matcher) matchOp(op *OpNode, litVal *FastVal) error {
 	switch op.Op {
 	case OpTypeEquals:
 		opRes = lhsVal.Equals(rhsVal)
-	case OpTypeNotEquals:
-		opRes = !lhsVal.Equals(rhsVal)
 	case OpTypeLessThan:
 		opRes = lhsVal.Compare(rhsVal) < 0
 	case OpTypeLessEquals:

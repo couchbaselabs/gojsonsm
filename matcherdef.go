@@ -65,7 +65,6 @@ type OpType int
 
 const (
 	OpTypeEquals OpType = iota
-	OpTypeNotEquals
 	OpTypeLessThan
 	OpTypeLessEquals
 	OpTypeGreaterThan
@@ -79,8 +78,6 @@ func (value OpType) String() string {
 	switch value {
 	case OpTypeEquals:
 		return "eq"
-	case OpTypeNotEquals:
-		return "neq"
 	case OpTypeLessThan:
 		return "lt"
 	case OpTypeLessEquals:
