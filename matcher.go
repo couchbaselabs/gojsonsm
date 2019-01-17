@@ -532,6 +532,10 @@ func (m *Matcher) matchExec(token tokenType, tokenData []byte, node *ExecNode) e
 			m.skipValue(token)
 		} else {
 			err, shouldReturn := m.matchObjectOrArray(token, tokenData, node)
+			if err == nil && node.After != nil {
+				m.matchAfter(node.After)
+			}
+
 			if shouldReturn {
 				return err
 			}
