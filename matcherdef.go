@@ -246,3 +246,40 @@ func (node ExecNode) String() string {
 
 	return strings.TrimRight(out, "\n")
 }
+
+func checkOpsForASingleNot(ops []OpNode, id int) (foundOpNode bool, containsSingleNot bool) {
+	for _, op := range ops {
+		if op.BucketIdx == BucketID(id) {
+			foundOpNode = true
+			if len(ops) == 1 && ops[0].Op == OpTypeNotEquals {
+				containsSingleNot = true
+			}
+			return
+		}
+	}
+	return
+}
+
+func (node ExecNode) ShouldNotSetUnresolvedToFalse(id int) bool {
+	var foundOp bool
+
+	foundOp, shouldNotSetFalse := checkOpsForASingleNot(node.Ops, id)
+	if foundOp == true {
+		return shouldNotSetFalse
+	}
+
+	if node.After != nil {
+		foundOp, shouldNotSetFalse = checkOpsForASingleNot(node.After.Ops, id)
+		if foundOp == true {
+			return shouldNotSetFalse
+		}
+	}
+
+	for _, elem := range node.Elems {
+		if elem.ShouldNotSetUnresolvedToFalse(id) == true {
+			return true
+		}
+	}
+
+	return false
+}

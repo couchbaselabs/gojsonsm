@@ -716,7 +716,7 @@ func (m *Matcher) Match(data []byte) (bool, error) {
 
 	// Resolve any outstanding buckets in the tree.  This is required for
 	// operators such as NOT and NEOR to correctly be resolved.
-	m.buckets.Resolve()
+	m.buckets.Resolve(m.def.ParseNode)
 
 	return m.buckets.IsTrue(0), nil
 }

@@ -252,7 +252,7 @@ func (state *binTreeState) SetStallIndex(index int) int {
 
 // Resolve forces the tree to be fully resolved (including cases such as NOT)
 // by doing a depth-first resolution of all unresolved nodes with `false`.
-func (state *binTreeState) Resolve() {
+func (state *binTreeState) Resolve(root *ExecNode) {
 	// Skip resolving if the full tree is already resolved
 	if state.IsResolved(0) {
 		return
@@ -263,7 +263,11 @@ func (state *binTreeState) Resolve() {
 	for i := treeLength - 1; i >= 0; i-- {
 		// If this bucket is not resolved, resolve it with false
 		if state.data[i] == binTreeStateUnknown {
-			state.MarkNode(i, false)
+			if root != nil && root.ShouldNotSetUnresolvedToFalse(i) {
+				state.MarkNode(i, true)
+			} else {
+				state.MarkNode(i, false)
+			}
 		}
 
 		// Leave as soon as the root has been resolved
