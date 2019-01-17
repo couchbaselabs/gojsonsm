@@ -512,7 +512,7 @@ func (t *Transformer) transformEquals(expr EqualsExpr) *ExecNode {
 }
 
 func (t *Transformer) transformNotEquals(expr NotEqualsExpr) *ExecNode {
-	return t.transformComparison(expr, OpTypeNotEquals, expr.Lhs, expr.Rhs)
+	return t.transformOne(NotExpr{EqualsExpr{expr.Lhs, expr.Rhs}})
 }
 
 func (t *Transformer) transformLessThan(expr LessThanExpr) *ExecNode {
