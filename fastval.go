@@ -187,6 +187,8 @@ func (val FastVal) AsInt() int64 {
 		return 1
 	case FalseValue:
 		return 0
+	case NullValue:
+		return math.MinInt64
 	}
 	return 0
 }
@@ -212,6 +214,8 @@ func (val FastVal) AsUint() uint64 {
 		return 1
 	case FalseValue:
 		return 0
+	case NullValue:
+		return math.MaxUint64
 	}
 	return 0
 }
@@ -237,12 +241,14 @@ func (val FastVal) AsFloat() float64 {
 		return 1.0
 	case FalseValue:
 		return 0.0
+	case NullValue:
+		return math.MaxFloat64
 	}
 	return 0.0
 }
 
 func (val FastVal) AsBoolean() bool {
-	return val.AsInt() != 0
+	return val.AsInt() != 0 && val.AsInt() != math.MinInt64
 }
 
 func (val FastVal) AsRegex() FastValRegexIface {
