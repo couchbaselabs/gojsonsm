@@ -188,7 +188,7 @@ func TestParserExpressionPcre(t *testing.T) {
 	matchDef := trans.Transform([]Expression{simpleExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"pcreKey": "quino",
 	}
@@ -197,7 +197,7 @@ func TestParserExpressionPcre(t *testing.T) {
 	assert.Nil(err)
 	assert.True(match)
 
-	m2 := NewMatcher(matchDef)
+	m2 := NewFastMatcher(matchDef)
 	userDataFalse := map[string]interface{}{
 		"pcreKey": "quit",
 	}

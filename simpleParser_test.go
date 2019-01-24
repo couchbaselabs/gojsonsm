@@ -901,7 +901,7 @@ func TestParserExpressionOutput2a(t *testing.T) {
 
 	var trans Transformer
 	matchDef := trans.Transform([]Expression{simpleExpr})
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
@@ -948,7 +948,7 @@ func TestParserExpressionOutputNot(t *testing.T) {
 	matchDef := trans.Transform([]Expression{jsonExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
@@ -996,7 +996,7 @@ func TestParserExpressionOutputNot2(t *testing.T) {
 	matchDef := trans.Transform([]Expression{jsonExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
@@ -1041,7 +1041,7 @@ func TestParserExpressionOutputNot3(t *testing.T) {
 	matchDef := trans.Transform([]Expression{jsonExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
@@ -1099,7 +1099,7 @@ func TestParserExpressionOutputGreaterThan(t *testing.T) {
 	matchDef := trans.Transform([]Expression{jsonExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
@@ -1157,7 +1157,7 @@ func TestParserExpressionOutputGreaterThanEquals(t *testing.T) {
 	matchDef := trans.Transform([]Expression{jsonExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
@@ -1215,7 +1215,7 @@ func TestParserExpressionOutputLessThan(t *testing.T) {
 	matchDef := trans.Transform([]Expression{jsonExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
@@ -1273,7 +1273,7 @@ func TestParserExpressionOutputLessThanEq(t *testing.T) {
 	matchDef := trans.Transform([]Expression{jsonExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
@@ -1331,7 +1331,7 @@ func TestParserExpressionOutputMatch(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
 			"first": "Neil",
@@ -1371,7 +1371,7 @@ func TestParserExpressionOutputMatchNeg(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
 			"first": "David",
@@ -1413,7 +1413,7 @@ func TestParserExpressionOutputMatchNotNeg(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
 			"first": "David",
@@ -1478,7 +1478,7 @@ func TestParserExpressionOutputNotMatch(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
 			"first": "Neil",
@@ -1517,7 +1517,7 @@ func TestParserExpressionOutputExists(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
 			"first": "Neil",
@@ -1559,7 +1559,7 @@ func TestParserExpressionOutputArrayEquals(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"userIDs": []string{
 			"brett19",
@@ -1600,7 +1600,7 @@ func TestParserExpressionOutputNotExists(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
 			"firstName": "Neil",
@@ -1640,7 +1640,7 @@ func TestParserExpressionOutputIsNull(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
 			"first": nil,
@@ -1680,7 +1680,7 @@ func TestParserExpressionOutputIsNotNull(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"name": map[string]interface{}{
 			"first": nil,
@@ -1721,8 +1721,8 @@ func TestParserExpressionOutputIsTrue(t *testing.T) {
 	assert.NotNil(matchDef)
 	assert.NotNil(matchDef2)
 
-	m := NewMatcher(matchDef)
-	m2 := NewMatcher(matchDef2)
+	m := NewFastMatcher(matchDef)
+	m2 := NewFastMatcher(matchDef2)
 	userData := map[string]interface{}{
 		"name": true,
 	}
@@ -1753,7 +1753,7 @@ func TestParserExpressionOutputXDCRInternalObj(t *testing.T) {
 	matchDef := trans.Transform([]Expression{simpleExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"[XDCRInternal with space]": map[string]interface{}{
 			"Version": 3.0,
@@ -2077,7 +2077,7 @@ func TestParserExpressionOutputArrayEqualsMissing(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"userIDsAlternate": []string{
 			"brett19",
@@ -2145,7 +2145,7 @@ func TestParserExpressionMathRoundValues(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"number": 5.4,
 	}
@@ -2188,7 +2188,7 @@ func TestParserExpressionMathRoundValues2(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"number": 5.4,
 	}
@@ -2216,7 +2216,7 @@ func TestParserBunchaMathFuncs(t *testing.T) {
 	matchDef := trans.Transform([]Expression{simpleExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"negNum":     -5,
 		"squaredNum": 4,
@@ -2486,7 +2486,7 @@ func TestParserDateFunc(t *testing.T) {
 
 	assert.Equal(jsonExpr.String(), simpleExpr.String())
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"transactionDate": "2018-01-02T03:04:05Z",
 	}
@@ -2514,7 +2514,7 @@ func TestParserDateFunc2(t *testing.T) {
 	matchDef := trans.Transform([]Expression{simpleExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"transactionDate": "2017-01-02T03:04:05Z",
 	}
@@ -2561,7 +2561,7 @@ func TestParserDateFunc3(t *testing.T) {
 	matchDef := trans.Transform([]Expression{simpleExpr})
 	assert.NotNil(matchDef)
 
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"transactionDate": "2017-01-02",
 	}

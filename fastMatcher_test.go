@@ -26,7 +26,7 @@ func runExprMatchTest(t *testing.T, expr Expression, expectedDocIDs []string) {
 	var matchedDocIDs []string
 
 	for _, doc := range docs {
-		m := NewMatcher(matchDef)
+		m := NewFastMatcher(matchDef)
 		matched, err := m.Match(doc)
 		if err != nil {
 			t.Errorf("Matcher error: %s", err)

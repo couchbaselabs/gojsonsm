@@ -47,7 +47,7 @@ func BenchmarkMatcher(b *testing.B) {
 
 	var trans Transformer
 	matchDef := trans.Transform([]Expression{expr})
-	m := NewMatcher(matchDef)
+	m := NewFastMatcher(matchDef)
 
 	b.SetBytes(int64(totalBytes))
 	b.ResetTimer()
@@ -56,7 +56,7 @@ func BenchmarkMatcher(b *testing.B) {
 			_, err := m.Match(data[i])
 
 			if err != nil {
-				b.Fatalf("Matcher error: %s", err)
+				b.Fatalf("FastMatcher error: %s", err)
 			}
 		}
 	}
