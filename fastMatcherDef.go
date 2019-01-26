@@ -90,6 +90,8 @@ func (value OpType) String() string {
 		return "in"
 	case OpTypeExists:
 		return "exists"
+	case OpTypeMatches:
+		return "matches"
 	}
 
 	return "??unknown??"
