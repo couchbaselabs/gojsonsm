@@ -88,9 +88,11 @@ func (val FastVal) String() string {
 		return "??OBJECT??"
 	case TimeValue:
 		return val.GetTime().String()
+	case RegexValue:
+		return "(regexp)" + val.data.(*regexp.Regexp).String()
 	}
 
-	panic("unexpected data type")
+	panic(fmt.Sprintf("unexpected data type %v", val.dataType))
 }
 
 func (val FastVal) Type() ValueType {
@@ -435,6 +437,8 @@ func (val FastVal) Matches(other FastVal) bool {
 
 func NewFastVal(val interface{}) FastVal {
 	switch val := val.(type) {
+	case int:
+		return NewIntFastVal(int64(val))
 	case int8:
 		return NewIntFastVal(int64(val))
 	case int16:
@@ -443,6 +447,8 @@ func NewFastVal(val interface{}) FastVal {
 		return NewIntFastVal(int64(val))
 	case int64:
 		return NewIntFastVal(int64(val))
+	case uint:
+		return NewUintFastVal(uint64(val))
 	case uint8:
 		return NewUintFastVal(uint64(val))
 	case uint16:
