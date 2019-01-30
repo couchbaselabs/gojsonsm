@@ -1,6 +1,6 @@
-package gojsonsm
-
 // +build perf
+
+package gojsonsm
 
 import (
 	"testing"
