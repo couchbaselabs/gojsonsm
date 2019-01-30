@@ -1,5 +1,7 @@
 // Copyright 2018 Couchbase, Inc. All rights reserved.
 
+// +build perf
+
 package gojsonsm
 
 import (
