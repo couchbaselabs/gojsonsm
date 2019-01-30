@@ -960,7 +960,7 @@ func checkAndParseField(tokens []string, i *int, subTokens *[]string) (string, e
 					mode = cfmNone
 					if !skipAppend {
 						*subTokens = append(*subTokens, token[beginPos:pos+1])
-						outputToken = fmt.Sprintf("%s %s", string(token[beginPos:pos+1]))
+						outputToken = fmt.Sprintf("%s %s", outputToken, string(token[beginPos:pos+1]))
 					} else {
 						skipAppend = false
 					}
