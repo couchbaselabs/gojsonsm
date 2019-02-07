@@ -483,6 +483,33 @@ func TestFilterExpressionParser(t *testing.T) {
 	_, err = GetFilterExpressionMatcher(testStr)
 	assert.Nil(err)
 
+	// MB-32987 - some combinations of nested arrays and objects tests
+	fe = &FilterExpression{}
+	err = parser.ParseString("achievements[0] = 49 AND achievements[1] = 58 AND achievements[2] = 108 AND arrOfObjs[0].`1D` = 50 AND floatArrs[0] = 1.1", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	userData = map[string]interface{}{
+		"category":     1,
+		"email":        "3951c5@b1f2c7.com",
+		"city":         "258171",
+		"name":         "25134e ced17f",
+		"coins":        354.32,
+		"alt_email":    "5134ec@51c5b1.com",
+		"body":         "testBody",
+		"achievements": [6]int{49, 58, 108, 141, 177, 229},
+		"floatArrs":    [6]float64{1.1, 2.2, 3.3, 4.4, 5.5, 6.6},
+		"arrOfObjs":    [1]map[string]interface{}{{"1D": 50}},
+		"nestedArr":    [1][2]int{{61, 62}},
+		"realm":        "f41e4a",
+	}
+	udMarsh, _ = json.Marshal(userData)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
 	// Negative
 	_, _, err = NewFilterExpressionParser("fieldpath.`path = fieldPath2")
 	assert.NotNil(err)
