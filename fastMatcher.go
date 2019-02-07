@@ -629,7 +629,11 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 			}
 
 			switch token {
-			case endToken:
+			case tknObjectEnd:
+				return nil, false
+			case tknArrayEnd:
+				return nil, false
+			case tknEnd:
 				return nil, true
 			case tknListDelim:
 				arrayIndex++
@@ -643,6 +647,7 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 		if err != nil {
 			return err, true
 		}
+		// Keep this here to catch any empty array or empty objs
 		if token == endToken {
 			return nil, true
 		}
@@ -656,12 +661,14 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 		case tknEscString:
 			keyBytes = keyLitParse.ParseEscString(tokenData)
 		case tknArrayStart:
-			fallthrough
+			// Do nothing
 		case tknObjectStart:
-			// In case of embedded objects or arrays
-			return m.matchExec(token, tokenData, node), false
+			// Do nothing
 		default:
-			panic(fmt.Sprintf("expected literal, received: %v", token))
+			// If it's an array, it's possible that we're grabbing a literal like int or float, and we should not panic
+			if !arrayMode {
+				panic(fmt.Sprintf("expected literal, received: %v", token))
+			}
 		}
 
 		if arrayMode {
@@ -674,7 +681,7 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 			}
 
 			if token != tknObjectKeyDelim {
-				panic("expected object key delimiter")
+				panic(fmt.Sprintf("expected object key delimiter: got %v, %v", token, string(tokenData)))
 			}
 
 			token, tokenData, err = m.tokens.Step()
