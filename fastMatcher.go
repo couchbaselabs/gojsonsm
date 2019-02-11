@@ -580,7 +580,7 @@ func (m *FastMatcher) matchExec(token tokenType, tokenData []byte, node *ExecNod
 			}
 		}
 	} else {
-		panic("invalid token read")
+		panic(fmt.Sprintf("invalid token read - tokenType: %v data: %v", token, string(tokenData)))
 	}
 
 	if node.After != nil {
@@ -712,6 +712,10 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 
 func (m *FastMatcher) Match(data []byte) (bool, error) {
 	m.tokens.Reset(data)
+
+	if len(data) == 0 {
+		return false, nil
+	}
 
 	token, tokenData, err := m.tokens.Step()
 	if err != nil {

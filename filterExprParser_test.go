@@ -509,6 +509,7 @@ func TestFilterExpressionParser(t *testing.T) {
 	udMarsh, _ = json.Marshal(userData)
 	match, err = m.Match(udMarsh)
 	assert.True(match)
+	assert.Nil(err)
 
 	// Negative
 	_, _, err = NewFilterExpressionParser("fieldpath.`path = fieldPath2")
@@ -526,4 +527,16 @@ func TestFilterExpressionParser(t *testing.T) {
 	expr, err = fe.OutputExpression()
 	assert.Equal(ErrorMalformedParenthesis, err)
 
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	emptySlice := make([]byte, 0)
+	match, err = m.Match(emptySlice)
+	assert.False(match)
+	assert.Nil(err)
 }
