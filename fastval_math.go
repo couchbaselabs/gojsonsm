@@ -49,8 +49,50 @@ func FastValMathAbs(val FastVal) FastVal {
 	return NewInvalidFastVal()
 }
 
+type intToIntOp func(int64) int64
+type int2ToIntOp func(int64, int64) int64
 type floatToFloatOp func(float64) float64
 type float2ToFloatOp func(float64, float64) float64
+
+func fastValMathAdd(a, b float64) float64 {
+	return a + b
+}
+
+func fastValMathSub(a, b float64) float64 {
+	return a - b
+}
+
+func fastValMathMult(a, b float64) float64 {
+	return a * b
+}
+
+func fastValMathDiv(a, b float64) float64 {
+	return a / b
+}
+
+func fastValMathMod(a, b int64) int64 {
+	return a % b
+}
+
+func fastValNegate(a float64) float64 {
+	return -1.0 * a
+}
+
+func genericFastValIntOp(val FastVal, op intToIntOp) FastVal {
+	if val.IsNumeric() {
+		return NewIntFastVal(op(val.AsInt()))
+	}
+
+	return NewInvalidFastVal()
+}
+
+func genericFastVal2IntsOp(val, val1 FastVal, op int2ToIntOp) FastVal {
+	if !val.IsNumeric() || !val1.IsNumeric() {
+		return NewInvalidFastVal()
+	}
+
+	return NewIntFastVal(op(val.AsInt(), val1.AsInt()))
+}
 
 func genericFastValFloatOp(val FastVal, op floatToFloatOp) FastVal {
 	if val.IsNumeric() {
@@ -130,4 +172,28 @@ func FastValMathDegrees(val FastVal) FastVal {
 
 func FastValMathRadians(val FastVal) FastVal {
 	return genericFastValFloatOp(val, mathRadiansFunc)
+}
+
+func FastValMathAdd(val, val1 FastVal) FastVal {
+	return genericFastVal2FloatsOp(val, val1, fastValMathAdd)
+}
+
+func FastValMathSub(val, val1 FastVal) FastVal {
+	return genericFastVal2FloatsOp(val, val1, fastValMathSub)
+}
+
+func FastValMathMul(val, val1 FastVal) FastVal {
+	return genericFastVal2FloatsOp(val, val1, fastValMathMult)
+}
+
+func FastValMathDiv(val, val1 FastVal) FastVal {
+	return genericFastVal2FloatsOp(val, val1, fastValMathDiv)
+}
+
+func FastValMathMod(val, val1 FastVal) FastVal {
+	return genericFastVal2IntsOp(val, val1, fastValMathMod)
+}
+
+func FastValMathNeg(val FastVal) FastVal {
+	return genericFastValFloatOp(val, fastValNegate)
 }

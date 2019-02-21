@@ -30,6 +30,12 @@ const (
 	MathFuncSin     string = "mathSin"
 	MathFuncSqrt    string = "mathSqrt"
 	MathFuncTan     string = "mathTan"
+	MathFuncAdd     string = "mathAdd"
+	MathFuncSub     string = "mathSubract"
+	MathFuncMul     string = "mathMultiply"
+	MathFuncDiv     string = "mathDivide"
+	MathFuncMod     string = "mathModulo"
+	MathFuncNeg     string = "mathNegate"
 
 	FuncAbs    string = "ABS"
 	FuncAcos   string = "ACOS"
