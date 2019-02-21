@@ -324,8 +324,8 @@ func TestFilterExpressionParser(t *testing.T) {
 	err = parser.ParseString("arrayPath[1].path2.arrayPath3[10].`multiword array`[20] = fieldpath2.path2", fe)
 	assert.Nil(err)
 	assert.Equal("arrayPath [1]", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[0].String())
-	assert.Equal("arrayPath", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[0].StrValue)
-	assert.Equal("path2", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[1].StrValue)
+	assert.Equal("arrayPath", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[0].StrValue.String())
+	assert.Equal("path2", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[1].StrValue.String())
 	assert.Equal(0, len(fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[1].ArrayIndexes))
 	assert.Equal("arrayPath3 [10]", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[2].String())
 	assert.Equal("multiword array [20]", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[3].String())
@@ -511,6 +511,44 @@ func TestFilterExpressionParser(t *testing.T) {
 	assert.True(match)
 	assert.Nil(err)
 
+	// MB-33014 - Numeric operation on a field
+	fe = &FilterExpression{}
+	err = parser.ParseString("achievements * 10 = 10", fe)
+	assert.Nil(err)
+	assert.Equal("achievements", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[0].String())
+	assert.NotNil(fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.MathOp.Multiply)
+	assert.Equal("10", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.MathValue.String())
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	userData = map[string]interface{}{
+		"achievements": 1,
+	}
+	udMarsh, _ = json.Marshal(userData)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("ABS(-achievements[2]*10) > 0", fe)
+	assert.Nil(err)
+	assert.NotNil(fe.AndConditions[0].OrConditions[0].Operand.LHS.Func.ConstFuncOneArg.Argument.Field.MathNeg)
+	assert.Equal("achievements", fe.AndConditions[0].OrConditions[0].Operand.LHS.Func.ConstFuncOneArg.Argument.Field.Path[0].StrValue.String())
+	assert.Equal("[2]", fe.AndConditions[0].OrConditions[0].Operand.LHS.Func.ConstFuncOneArg.Argument.Field.Path[0].ArrayIndexes[0].String())
+	assert.NotNil(fe.AndConditions[0].OrConditions[0].Operand.LHS.Func.ConstFuncOneArg.Argument.Field.MathOp.Multiply)
+	assert.Equal("10", fe.AndConditions[0].OrConditions[0].Operand.LHS.Func.ConstFuncOneArg.Argument.Field.MathValue.String())
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	userData = map[string]interface{}{
+		"achievements": [6]int{49, 58, 108, 141, 177, 229},
+	}
+	udMarsh, _ = json.Marshal(userData)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
 	// Negative
 	_, _, err = NewFilterExpressionParser("fieldpath.`path = fieldPath2")
 	assert.NotNil(err)
@@ -539,4 +577,8 @@ func TestFilterExpressionParser(t *testing.T) {
 	match, err = m.Match(emptySlice)
 	assert.False(match)
 	assert.Nil(err)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("achievement * 2 +1", fe)
+	assert.NotNil(err)
 }

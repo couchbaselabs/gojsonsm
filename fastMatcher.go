@@ -166,6 +166,29 @@ func (m *FastMatcher) resolveFunc(fn FuncRef, activeLit *FastVal) FastVal {
 	case DateFunc:
 		p1 := m.resolveParam(fn.Params[0], activeLit)
 		return FastValDateFunc(p1)
+	case MathFuncAdd:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		p2 := m.resolveParam(fn.Params[1], activeLit)
+		return FastValMathAdd(p1, p2)
+	case MathFuncSub:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		p2 := m.resolveParam(fn.Params[1], activeLit)
+		return FastValMathSub(p1, p2)
+	case MathFuncMul:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		p2 := m.resolveParam(fn.Params[1], activeLit)
+		return FastValMathMul(p1, p2)
+	case MathFuncDiv:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		p2 := m.resolveParam(fn.Params[1], activeLit)
+		return FastValMathDiv(p1, p2)
+	case MathFuncMod:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		p2 := m.resolveParam(fn.Params[1], activeLit)
+		return FastValMathMod(p1, p2)
+	case MathFuncNeg:
+		p1 := m.resolveParam(fn.Params[0], activeLit)
+		return FastValMathNeg(p1)
 	default:
 		panic(fmt.Sprintf("encountered unexpected function name: %v", fn.FuncName))
 	}

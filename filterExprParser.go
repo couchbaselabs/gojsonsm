@@ -20,8 +20,9 @@ import (
 // RHS                      = ConstFuncExpr | Boolean | Value | Field
 // CompareOp                = "=" | "<>" | ">" | ">=" | "<" | "<="
 // CheckOp                  = "EXISTS" | ( "IS" [ "NOT" ] ( NULL | MISSING ) )
-// Field                    = OnePath { "." OnePath }
-// OnePath                  = ( PathFuncExpression | @String | @Ident | @RawString | @Char ){ ArrayIndex }
+// Field                    = { @"-" } OnePath { "." OnePath } { MathOp MathValue }
+// OnePath                  = ( PathFuncExpression | StringType ){ ArrayIndex }
+// StringType               = @String | @Ident | @RawString | @Char
 // ArrayIndex               = "[" [ @"-" ] @Int "]"
 // Value                    = @String
 // ConstFuncExpr            = ConstFuncNoArg | ConstFuncOneArg | ConstFuncTwoArgs
@@ -35,6 +36,8 @@ import (
 // ConstFuncArgumentRHS     = Value
 // PathFuncExpression       = OnePathFuncNoArg
 // OnePathFuncNoArg         = OnePathFuncNoArgName "(" ")"
+// MathOp                   = @"+" | @"-" | @"*" | @"/" | @"%"
+// MathValue                = @Int | @Float
 // OnePathFuncNoArgName     = "META"
 // BooleanFuncExpr          = BooleanFuncTwoArgs
 // BooleanFuncTwoArgs       = BooleanFuncTwoArgsName "(" ConstFuncArgument "," ConstFuncArgumentRHS ")"
@@ -465,15 +468,30 @@ func (f *FERhs) OutputExpression() (Expression, error) {
 }
 
 type FEField struct {
-	Path []*FEOnePath `@@ { "." @@ }`
+	MathNeg   *bool               `{ @"-" }`
+	Path      []*FEOnePath        `@@ { "." @@ }`
+	MathOp    *FEMathArithmeticOp `{ ( @@`
+	MathValue *FEMathValue        `@@ ) }`
 }
 
 func (fef *FEField) String() string {
 	output := []string{}
+	outerOutput := []string{}
 	for _, onePath := range fef.Path {
 		output = append(output, onePath.String())
 	}
-	return strings.Join(output, ".")
+	fieldOutput := strings.Join(output, ".")
+	if fef.MathNeg != nil {
+		fieldOutput = fmt.Sprintf("%v%v", "-", fieldOutput)
+	}
+	outerOutput = append(outerOutput, fieldOutput)
+	if fef.MathOp != nil {
+		outerOutput = append(outerOutput, fef.MathOp.String())
+	}
+	if fef.MathValue != nil {
+		outerOutput = append(outerOutput, fef.MathValue.String())
+	}
+	return strings.Join(outerOutput, " ")
 }
 
 func (f *FEField) OutputExpression() (Expression, error) {
@@ -493,7 +511,39 @@ func (f *FEField) OutputExpression() (Expression, error) {
 			outExpr.Path = append(outExpr.Path, arrIdx)
 		}
 	}
-	return outExpr, nil
+
+	if f.MathNeg != nil || (f.MathOp != nil && f.MathValue != nil) {
+		var mathOutExpr FuncExpr
+		if f.MathOp == nil {
+			// Only thing is a negation of the field value
+			mathOutExpr.FuncName = MathFuncNeg
+			mathOutExpr.Params = append(mathOutExpr.Params, outExpr)
+		} else {
+			// {-}field mathOp mathVal
+			mathOpExpr, err := f.MathOp.OutputExpression()
+			if err != nil {
+				return nil, err
+			}
+			mathOutExpr = mathOpExpr.(FuncExpr)
+
+			if f.MathNeg != nil {
+				negativeFieldExpr := FuncExpr{FuncName: MathFuncNeg}
+				negativeFieldExpr.Params = append(negativeFieldExpr.Params, outExpr)
+				mathOutExpr.Params = append(mathOutExpr.Params, negativeFieldExpr)
+			} else {
+				mathOutExpr.Params = append(mathOutExpr.Params, outExpr)
+			}
+
+			valueExpr, err := f.MathValue.OutputExpression()
+			if err != nil {
+				return nil, err
+			}
+			mathOutExpr.Params = append(mathOutExpr.Params, valueExpr)
+		}
+		return mathOutExpr, nil
+	} else {
+		return outExpr, nil
+	}
 }
 
 // The problem with this parser is that if FEField is prioritized higher than FEValue, then
@@ -518,27 +568,39 @@ func (f *FEField) OutputExpressionSpecialAsValue() (Expression, error) {
 	return ValueExpr{f.Path[0].String()}, nil
 }
 
+type FEStringType struct {
+	EscapedStrVal string `( @String  |`
+	CharVal       string `@Char |`
+	RawStr        string `@RawString |`
+	StrValue      string `@Ident )`
+}
+
+func (f *FEStringType) String() string {
+	if len(f.CharVal) > 0 {
+		return f.CharVal
+	} else if len(f.RawStr) > 0 {
+		return f.RawStr
+	} else if len(f.StrValue) > 0 {
+		return f.StrValue
+	} else if len(f.EscapedStrVal) > 0 {
+		return f.EscapedStrVal
+	} else {
+		return ""
+	}
+}
+
 type FEOnePath struct {
-	OnePathFunc   *FEOnePathFuncExpr `( @@  |`
-	EscapedStrVal string             `@String  |`
-	CharVal       string             `@Char |`
-	RawStr        string             `@RawString |`
-	StrValue      string             `@Ident )`
-	ArrayIndexes  []*FEArrayIndex    `{ @@ }`
+	OnePathFunc  *FEOnePathFuncExpr `( @@  |`
+	StrValue     *FEStringType      ` @@ )`
+	ArrayIndexes []*FEArrayIndex    `{ @@ }`
 }
 
 func (feop *FEOnePath) String() string {
 	output := []string{}
 	if feop.OnePathFunc != nil {
 		output = append(output, feop.OnePathFunc.String())
-	} else if len(feop.CharVal) > 0 {
-		output = append(output, feop.CharVal)
-	} else if len(feop.RawStr) > 0 {
-		output = append(output, feop.RawStr)
-	} else if len(feop.StrValue) > 0 {
-		output = append(output, feop.StrValue)
-	} else if len(feop.EscapedStrVal) > 0 {
-		output = append(output, feop.EscapedStrVal)
+	} else if len(feop.StrValue.String()) > 0 {
+		output = append(output, feop.StrValue.String())
 	} else {
 		output = append(output, "")
 	}
@@ -555,14 +617,8 @@ func (f *FEOnePath) OutputOnePath() (string, []string, error) {
 		arrayIdx = append(arrayIdx, arr.String())
 	}
 
-	if len(f.EscapedStrVal) > 0 {
-		return f.EscapedStrVal, arrayIdx, nil
-	} else if len(f.CharVal) > 0 {
-		return f.CharVal, arrayIdx, nil
-	} else if len(f.RawStr) > 0 {
-		return f.RawStr, arrayIdx, nil
-	} else if len(f.StrValue) > 0 {
-		return f.StrValue, arrayIdx, nil
+	if f.StrValue != nil {
+		return f.StrValue.String(), arrayIdx, nil
 	} else if f.OnePathFunc != nil {
 		return f.OnePathFunc.String(), arrayIdx, nil
 	} else {
@@ -620,6 +676,71 @@ func (n *FEOnePathFuncNoArgName) String() string {
 // as it is being used internally
 func (f *FEOnePathFuncNoArgName) OutputExpression() (Expression, error) {
 	return nil, fmt.Errorf("Not supported (FEOnePathFuncNoArgName) %v", f.String())
+}
+
+type FEMathArithmeticOp struct {
+	Addition    *bool `@"+" |`
+	Subtraction *bool `@"-" |`
+	Multiply    *bool `@"*" |`
+	Division    *bool `@"/" |`
+	Modulo      *bool `@"%"`
+}
+
+func (f *FEMathArithmeticOp) String() string {
+	if f.Addition != nil {
+		return "+"
+	} else if f.Subtraction != nil {
+		return "-"
+	} else if f.Multiply != nil {
+		return "*"
+	} else if f.Division != nil {
+		return "/"
+	} else if f.Modulo != nil {
+		return "%"
+	} else {
+		return "?? (FEMathArithmeticOp)"
+	}
+}
+
+func (f *FEMathArithmeticOp) OutputExpression() (Expression, error) {
+	if f.Addition != nil {
+		return FuncExpr{FuncName: MathFuncAdd}, nil
+	} else if f.Subtraction != nil {
+		return FuncExpr{FuncName: MathFuncSub}, nil
+	} else if f.Multiply != nil {
+		return FuncExpr{FuncName: MathFuncMul}, nil
+	} else if f.Division != nil {
+		return FuncExpr{FuncName: MathFuncDiv}, nil
+	} else if f.Modulo != nil {
+		return FuncExpr{FuncName: MathFuncMod}, nil
+	} else {
+		return nil, fmt.Errorf("Invalid FEMathArithmeticOp %v", f.String())
+	}
+}
+
+type FEMathValue struct {
+	IntValue   *int     `@Int |`
+	FloatValue *float64 `@Float`
+}
+
+func (f *FEMathValue) String() string {
+	if f.IntValue != nil {
+		return fmt.Sprintf("%v", *f.IntValue)
+	} else if f.FloatValue != nil {
+		return fmt.Sprintf("%v", *f.FloatValue)
+	} else {
+		return "?? (FEMathValue)"
+	}
+}
+
+func (f *FEMathValue) OutputExpression() (Expression, error) {
+	if f.IntValue != nil {
+		return ValueExpr{*f.IntValue}, nil
+	} else if f.FloatValue != nil {
+		return ValueExpr{*f.FloatValue}, nil
+	} else {
+		return nil, fmt.Errorf("Invalid FEMathValue %v", f.String())
+	}
 }
 
 type FEValue struct {
