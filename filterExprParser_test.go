@@ -93,13 +93,14 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("TRUE AND (TRUE OR FALSE) AND FALSE", fe)
 	assert.Nil(err)
-	assert.Equal(1, len(fe.AndConditions))
-	assert.Equal(2, len(fe.AndConditions[0].OrConditions))
-	assert.Nil(fe.AndConditions[0].OrConditions[0].SubExpr) // TRUE (AND...)
-	assert.NotNil(fe.AndConditions[0].OrConditions[1].SubExpr)
-	assert.Equal(2, len(fe.AndConditions[0].OrConditions[1].SubExpr.AndConditions))                 // (TRUE OR FALSE) AND FALSE
-	assert.Equal(1, len(fe.AndConditions[0].OrConditions[1].SubExpr.AndConditions[0].OrConditions)) // (TRUE OR FALSE)
-	assert.Equal(1, len(fe.AndConditions[0].OrConditions[1].SubExpr.AndConditions[1].OrConditions)) //  FALSE
+	assert.Equal(1, len(fe.AndConditions))                  // TRUE (AND...)
+	assert.Equal(1, len(fe.SubFilterExpr))                  // (TRUE OR FALSE) AND FALSE
+	assert.Equal(2, len(fe.SubFilterExpr[0].AndConditions)) // (TRUE OR FALSE) (AND...)
+	assert.Equal(1, len(fe.SubFilterExpr[0].AndConditions[0].OrConditions))
+	assert.Equal(1, len(fe.SubFilterExpr[0].AndConditions[1].OrConditions))
+	assert.Equal(1, len(fe.SubFilterExpr[0].SubFilterExpr)) // FALSE
+	assert.Equal(1, len(fe.SubFilterExpr[0].SubFilterExpr[0].AndConditions))
+	assert.Equal(0, len(fe.SubFilterExpr[0].SubFilterExpr[0].SubFilterExpr))
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 
@@ -580,5 +581,21 @@ func TestFilterExpressionParser(t *testing.T) {
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("achievement * 2 +1", fe)
+	assert.NotNil(err)
+
+	// Typos
+	_, _, err = NewFilterExpressionParser("REGEX_CONTAINS(KEY, \"something\")")
+	assert.NotNil(err)
+	_, _, err = NewFilterExpressionParser("REGEXP_CONTAINS(METAS().id, \"something\")")
+	assert.NotNil(err)
+	_, _, err = NewFilterExpressionParser("REGEXP_CONTAINS(METAS().ID(), \"something\")")
+	assert.NotNil(err)
+
+	// Unfinished
+	_, _, err = NewFilterExpressionParser("REGEX_CONTAINS(KEY, \"something\") AND OR")
+	assert.NotNil(err)
+	_, _, err = NewFilterExpressionParser("REGEXP_CONTAINS(METAS().ID(), \"something)")
+	assert.NotNil(err)
+	_, _, err = NewFilterExpressionParser("`field is unfinished = \"unfinished_value")
 	assert.NotNil(err)
 }
