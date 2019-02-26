@@ -13,7 +13,7 @@ import (
 
 // FilterExpression         = ( AndCondition { "OR" AndCondition } ) { "AND" FilterExpression }
 // AndCondition             = { OpenParens } Condition { "AND" Condition } { CloseParen }
-// Condition                = ( [ "NOT" ] Condition ) | Operand | FilterExpression
+// Condition                = ( [ "NOT" ] Condition ) | Operand
 // Operand                  = BooleanExpr | ( LHS ( CheckOp | ( CompareOp RHS) ) )
 // BooleanExpr              = Boolean | BooleanFuncExpr
 // LHS                      = ConstFuncExpr | Boolean | Field | Value
@@ -214,16 +214,13 @@ func (f *FEAndCondition) OutputExpression() (Expression, error) {
 }
 
 type FECondition struct {
-	Not     *FECondition      `"NOT" @@`
-	Operand *FEOperand        `| @@`
-	SubExpr *FilterExpression `| @@`
+	Not     *FECondition `"NOT" @@`
+	Operand *FEOperand   `| @@`
 }
 
 func (f *FECondition) GetTotalOpenParens() (count int) {
 	if f.Not != nil {
 		count += f.Not.GetTotalOpenParens()
-	} else if f.SubExpr != nil {
-		count += f.SubExpr.GetTotalOpenParens()
 	}
 	// Operand has no open or close parens
 	return
@@ -232,8 +229,6 @@ func (f *FECondition) GetTotalOpenParens() (count int) {
 func (f *FECondition) GetTotalCloseParens() (count int) {
 	if f.Not != nil {
 		count += f.Not.GetTotalCloseParens()
-	} else if f.SubExpr != nil {
-		count += f.SubExpr.GetTotalCloseParens()
 	}
 	// Operand has no open or close parens
 	return
@@ -246,8 +241,6 @@ func (fec *FECondition) String() string {
 		outputStr = append(outputStr, fmt.Sprintf("%v %v", OperatorNot, fec.Not.String()))
 	} else if fec.Operand != nil {
 		outputStr = append(outputStr, fec.Operand.String())
-	} else if fec.SubExpr != nil {
-		outputStr = append(outputStr, fec.SubExpr.String())
 	} else {
 		outputStr = append(outputStr, "?? (FECondition)")
 	}
@@ -261,8 +254,6 @@ func (f *FECondition) OutputExpression() (Expression, error) {
 		return NotExpr{subNot}, err
 	} else if f.Operand != nil {
 		return f.Operand.OutputExpression()
-	} else if f.SubExpr != nil {
-		return f.SubExpr.OutputExpression()
 	} else {
 		return nil, fmt.Errorf("Invalid FECondition %v", f.String())
 	}
