@@ -51,8 +51,17 @@ func (p *fastLitParser) ParseString(bytes []byte) []byte {
 	return bytes[1 : len(bytes)-1]
 }
 
+func (p *fastLitParser) ParseStringWLen(bytes []byte, size int) []byte {
+	return bytes[1 : size-1]
+}
+
 func (p *fastLitParser) ParseEscString(bytes []byte) []byte {
 	bytesOut, _ := unescapeJsonString(bytes[1:len(bytes)-1], p.tmpBytesData[:])
+	return bytesOut
+}
+
+func (p *fastLitParser) ParseEscStringWLen(bytes []byte, size int) []byte {
+	bytesOut, _ := unescapeJsonString(bytes[1:size-1], p.tmpBytesData[:])
 	return bytesOut
 }
 

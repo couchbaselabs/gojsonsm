@@ -36,7 +36,7 @@ func (m *FastMatcher) leaveValue() error {
 
 	tokens := &m.tokens
 	for {
-		token, _, err := tokens.Step()
+		token, _, _, err := tokens.Step()
 		if err != nil {
 			return err
 		}
@@ -93,7 +93,7 @@ func (m *FastMatcher) literalFromSlot(slot SlotID) FastVal {
 
 	slotInfo := m.slots[slot-1]
 	m.tokens.Seek(slotInfo.start)
-	token, tokenData, _ := m.tokens.Step()
+	token, tokenData, _, _ := m.tokens.Step()
 
 	if isLiteralToken(token) {
 		var parser fastLitParser
@@ -284,7 +284,7 @@ func (m *FastMatcher) matchElems(token tokenType, tokenData []byte, elems map[st
 		// If this is not the first entry in the object, there should be a
 		// list delimiter ('c') that shows up in the input first.
 		if i != 0 {
-			token, _, err := m.tokens.Step()
+			token, _, _, err := m.tokens.Step()
 			if err != nil {
 				return err
 			}
@@ -297,7 +297,7 @@ func (m *FastMatcher) matchElems(token tokenType, tokenData []byte, elems map[st
 			}
 		}
 
-		token, tokenData, err := m.tokens.Step()
+		token, tokenData, _, err := m.tokens.Step()
 		if err != nil {
 			return err
 		}
@@ -314,7 +314,7 @@ func (m *FastMatcher) matchElems(token tokenType, tokenData []byte, elems map[st
 			panic("expected literal")
 		}
 
-		token, _, err = m.tokens.Step()
+		token, _, _, err = m.tokens.Step()
 		if err != nil {
 			return err
 		}
@@ -322,7 +322,7 @@ func (m *FastMatcher) matchElems(token tokenType, tokenData []byte, elems map[st
 			panic("expected object key delimiter")
 		}
 
-		token, tokenData, err = m.tokens.Step()
+		token, tokenData, tokenDataLen, err := m.tokens.Step()
 		if err != nil {
 			return err
 		}
@@ -330,7 +330,7 @@ func (m *FastMatcher) matchElems(token tokenType, tokenData []byte, elems map[st
 		if keyElem, ok := elems[string(keyBytes)]; ok {
 			// Run the execution node that applies to this particular
 			// key of the object.
-			m.matchExec(token, tokenData, keyElem)
+			m.matchExec(token, tokenData, tokenDataLen, keyElem)
 
 			// Check if running this keys execution has resolved the entirety
 			// of the expression, if so we can leave immediately.
@@ -387,7 +387,7 @@ func (m *FastMatcher) matchLoop(token tokenType, tokenData []byte, loop *LoopNod
 		// If this is not the first entry in the array, there should be a
 		// list delimiter (',') that shows up in the input first.
 		if i != 0 {
-			token, _, err := m.tokens.Step()
+			token, _, _, err := m.tokens.Step()
 			if err != nil {
 				return err
 			}
@@ -400,7 +400,7 @@ func (m *FastMatcher) matchLoop(token tokenType, tokenData []byte, loop *LoopNod
 			}
 		}
 
-		token, tokenData, err := m.tokens.Step()
+		token, tokenData, tokenDataLen, err := m.tokens.Step()
 		if err != nil {
 			return err
 		}
@@ -413,7 +413,7 @@ func (m *FastMatcher) matchLoop(token tokenType, tokenData []byte, loop *LoopNod
 		m.buckets.ResetNode(loopBucketIdx)
 
 		// Run the execution node for this element of the array.
-		err = m.matchExec(token, tokenData, loop.Node)
+		err = m.matchExec(token, tokenData, tokenDataLen, loop.Node)
 		if err != nil {
 			return err
 		}
@@ -484,7 +484,7 @@ func (m *FastMatcher) matchAfter(node *AfterNode) error {
 			slotInfo := m.slots[slot.Slot-1]
 
 			m.tokens.Seek(slotInfo.start)
-			token, tokenData, err := m.tokens.Step()
+			token, tokenData, _, err := m.tokens.Step()
 
 			// run the loop matcher
 			err = m.matchLoop(token, tokenData, &loop)
@@ -517,14 +517,14 @@ func (m *FastMatcher) matchAfter(node *AfterNode) error {
 	return nil
 }
 
-func (m *FastMatcher) matchExec(token tokenType, tokenData []byte, node *ExecNode) error {
+func (m *FastMatcher) matchExec(token tokenType, tokenData []byte, tokenDataLen int, node *ExecNode) error {
 	startPos := m.tokens.Position()
 	endPos := -1
 
 	// The start position needs to include the token we already parsed, so lets
 	// back up our position based on how long that is...
 	// TODO(brett19): We should probably find a more optimal way to handle this...
-	startPos -= len(tokenData)
+	startPos -= tokenDataLen
 
 	if isLiteralToken(token) {
 		var litParse fastLitParser
@@ -646,7 +646,7 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 		// If this is not the first entry in the object, there should be a
 		// list delimiter ('c') that shows up in the input first.
 		if i != 0 {
-			token, _, err := m.tokens.Step()
+			token, _, _, err := m.tokens.Step()
 			if err != nil {
 				return err, true
 			}
@@ -666,7 +666,7 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 			}
 		}
 
-		token, tokenData, err := m.tokens.Step()
+		token, tokenData, tokenDataLen, err := m.tokens.Step()
 		if err != nil {
 			return err, true
 		}
@@ -680,9 +680,9 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 		var keyBytes []byte
 		switch token {
 		case tknString:
-			keyBytes = keyLitParse.ParseString(tokenData)
+			keyBytes = keyLitParse.ParseStringWLen(tokenData, tokenDataLen)
 		case tknEscString:
-			keyBytes = keyLitParse.ParseEscString(tokenData)
+			keyBytes = keyLitParse.ParseEscStringWLen(tokenData, tokenDataLen)
 		case tknArrayStart:
 			// Do nothing
 		case tknObjectStart:
@@ -698,7 +698,7 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 			// Fake a key element by using the array index, and use the key as the actual value, tokenData
 			keyString = fmt.Sprintf("[%d]", arrayIndex)
 		} else {
-			token, tokenData, err = m.tokens.Step()
+			token, tokenData, tokenDataLen, err = m.tokens.Step()
 			if err != nil {
 				return err, true
 			}
@@ -707,7 +707,7 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 				panic(fmt.Sprintf("expected object key delimiter: got %v, %v", token, string(tokenData)))
 			}
 
-			token, tokenData, err = m.tokens.Step()
+			token, tokenData, tokenDataLen, err = m.tokens.Step()
 			if err != nil {
 				return err, true
 			}
@@ -717,7 +717,7 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 		if keyElem, ok := node.Elems[keyString]; ok {
 			// Run the execution node that applies to this particular
 			// key of the object.
-			m.matchExec(token, tokenData, keyElem)
+			m.matchExec(token, tokenData, tokenDataLen, keyElem)
 
 			// Check if running this keys execution has resolved the entirety
 			// of the expression, if so we can leave immediately.
@@ -740,12 +740,12 @@ func (m *FastMatcher) Match(data []byte) (bool, error) {
 		return false, nil
 	}
 
-	token, tokenData, err := m.tokens.Step()
+	token, tokenData, tokenDataLen, err := m.tokens.Step()
 	if err != nil {
 		return false, err
 	}
 
-	err = m.matchExec(token, tokenData, m.def.ParseNode)
+	err = m.matchExec(token, tokenData, tokenDataLen, m.def.ParseNode)
 	if err != nil {
 		return false, err
 	}
