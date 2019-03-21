@@ -10,7 +10,7 @@ import (
 func testTokenizedStep(t *testing.T, tok *jsonTokenizer, expectedToken tokenType, expectedTokenStr string) {
 	t.Helper()
 
-	token, tokenData, err := tok.Step()
+	token, tokenData, _, err := tok.Step()
 	if err != nil {
 		t.Fatalf("encountered stepping error: %s", err)
 	}
@@ -175,7 +175,7 @@ func TestTokenizerLong(t *testing.T) {
 	var tok jsonTokenizer
 	tok.Reset(dataBytes)
 	for {
-		token, _, err := tok.Step()
+		token, _, _, err := tok.Step()
 		if err != nil {
 			panic(fmt.Sprintf("encountered stepping error: %s", err))
 		}
@@ -201,7 +201,7 @@ func BenchmarkTokenize(b *testing.B) {
 		tok.Reset(dataBytes)
 
 		for {
-			token, _, err := tok.Step()
+			token, _, _, err := tok.Step()
 			if err != nil {
 				panic(fmt.Sprintf("encountered stepping error: %s", err))
 			}

@@ -103,12 +103,14 @@ func tokIsSpaceChar(c byte) bool {
 }
 
 type jsonTokenizer struct {
-	data []byte
-	pos  int
+	data    []byte
+	dataLen int
+	pos     int
 }
 
 func (tkn *jsonTokenizer) Reset(data []byte) {
 	tkn.data = data
+	tkn.dataLen = len(data)
 	tkn.pos = 0
 }
 
@@ -120,15 +122,15 @@ func (tkn *jsonTokenizer) Seek(pos int) {
 	tkn.pos = pos
 }
 
-func (tkn *jsonTokenizer) Step() (tokenType, []byte, error) {
+func (tkn *jsonTokenizer) Step() (tokenType, []byte, int, error) {
 	// Bring everying local for optimization purposes
 	dataSlice := tkn.data
-	dataLen := len(dataSlice)
+	dataLen := tkn.dataLen
 	dataPos := tkn.pos
 
 	// Check that we aren't out of bounds...
 	if dataPos >= dataLen {
-		return tknEnd, nil, nil
+		return tknEnd, nil, 0, nil
 	}
 
 	// Keep track of where we started, so we can return the tokens data
@@ -155,7 +157,7 @@ DataLoop:
 				break DataLoop
 			default:
 				// We couldn't have expected this... time to fail :/
-				return tknUnknown, nil, errors.New("unexpected end of input")
+				return tknUnknown, nil, 0, errors.New("unexpected end of input")
 			}
 		}
 
@@ -223,7 +225,7 @@ DataLoop:
 					continue DataLoop
 				}
 
-				return tknUnknown, nil, fmt.Errorf("looking for beginning of value but found `%c`", c)
+				return tknUnknown, nil, 0, fmt.Errorf("looking for beginning of value but found `%c`", c)
 			}
 
 		case toksBeginStringOrEmpty:
@@ -246,7 +248,7 @@ DataLoop:
 				state = toksInString
 				continue DataLoop
 			}
-			return tknUnknown, nil, errors.New("looking for beginning of object key string")
+			return tknUnknown, nil, 0, errors.New("looking for beginning of object key string")
 
 		case toksInString:
 			if c == '"' {
@@ -258,7 +260,7 @@ DataLoop:
 				continue DataLoop
 			}
 			if c < 0x20 {
-				return tknUnknown, nil, errors.New("in string literal")
+				return tknUnknown, nil, 0, errors.New("in string literal")
 			}
 
 			// continue with current state
@@ -275,7 +277,7 @@ DataLoop:
 				state = toksInStringEscU
 				continue DataLoop
 			default:
-				return tknUnknown, nil, errors.New("in string escape code")
+				return tknUnknown, nil, 0, errors.New("in string escape code")
 			}
 
 		case toksInStringEscU:
@@ -284,7 +286,7 @@ DataLoop:
 				continue DataLoop
 			}
 			// numbers
-			return tknUnknown, nil, errors.New("in \\u hexadecimal character escape")
+			return tknUnknown, nil, 0, errors.New("in \\u hexadecimal character escape")
 
 		case toksInStringEscU1:
 			if '0' <= c && c <= '9' || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F' {
@@ -292,7 +294,7 @@ DataLoop:
 				continue DataLoop
 			}
 			// numbers
-			return tknUnknown, nil, errors.New("in \\u hexadecimal character escape")
+			return tknUnknown, nil, 0, errors.New("in \\u hexadecimal character escape")
 
 		case toksInStringEscU12:
 			if '0' <= c && c <= '9' || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F' {
@@ -300,7 +302,7 @@ DataLoop:
 				continue DataLoop
 			}
 			// numbers
-			return tknUnknown, nil, errors.New("in \\u hexadecimal character escape")
+			return tknUnknown, nil, 0, errors.New("in \\u hexadecimal character escape")
 
 		case toksInStringEscU123:
 			if '0' <= c && c <= '9' || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F' {
@@ -308,7 +310,7 @@ DataLoop:
 				continue DataLoop
 			}
 			// numbers
-			return tknUnknown, nil, errors.New("in \\u hexadecimal character escape")
+			return tknUnknown, nil, 0, errors.New("in \\u hexadecimal character escape")
 
 		case toksNeg:
 			if c == '0' {
@@ -319,7 +321,7 @@ DataLoop:
 				state = toks1
 				continue DataLoop
 			}
-			return tknUnknown, nil, errors.New("in numeric literal")
+			return tknUnknown, nil, 0, errors.New("in numeric literal")
 
 		case toks1:
 			if '0' <= c && c <= '9' {
@@ -349,7 +351,7 @@ DataLoop:
 				state = toksDot0
 				continue DataLoop
 			}
-			return tknUnknown, nil, errors.New("after decimal point in numeric literal")
+			return tknUnknown, nil, 0, errors.New("after decimal point in numeric literal")
 
 		case toksDot0:
 			if '0' <= c && c <= '9' {
@@ -380,7 +382,7 @@ DataLoop:
 				state = toksE0
 				continue DataLoop
 			}
-			return tknUnknown, nil, errors.New("in exponent of numeric literal")
+			return tknUnknown, nil, 0, errors.New("in exponent of numeric literal")
 
 		case toksE0:
 			if '0' <= c && c <= '9' {
@@ -398,70 +400,70 @@ DataLoop:
 				state = toksTr
 				continue DataLoop
 			}
-			return tknUnknown, nil, errors.New("in literal true (expecting 'r')")
+			return tknUnknown, nil, 0, errors.New("in literal true (expecting 'r')")
 
 		case toksTr:
 			if c == 'u' {
 				state = toksTru
 				continue DataLoop
 			}
-			return tknUnknown, nil, errors.New("in literal true (expecting 'u')")
+			return tknUnknown, nil, 0, errors.New("in literal true (expecting 'u')")
 
 		case toksTru:
 			if c == 'e' {
 				tokenType = tknTrue
 				break DataLoop
 			}
-			return tknUnknown, nil, errors.New("in literal true (expecting 'e')")
+			return tknUnknown, nil, 0, errors.New("in literal true (expecting 'e')")
 
 		case toksF:
 			if c == 'a' {
 				state = toksFa
 				continue DataLoop
 			}
-			return tknUnknown, nil, errors.New("in literal false (expecting 'a')")
+			return tknUnknown, nil, 0, errors.New("in literal false (expecting 'a')")
 
 		case toksFa:
 			if c == 'l' {
 				state = toksFal
 				continue DataLoop
 			}
-			return tknUnknown, nil, errors.New("in literal false (expecting 'l')")
+			return tknUnknown, nil, 0, errors.New("in literal false (expecting 'l')")
 
 		case toksFal:
 			if c == 's' {
 				state = toksFals
 				continue DataLoop
 			}
-			return tknUnknown, nil, errors.New("in literal false (expecting 's')")
+			return tknUnknown, nil, 0, errors.New("in literal false (expecting 's')")
 
 		case toksFals:
 			if c == 'e' {
 				tokenType = tknFalse
 				break DataLoop
 			}
-			return tknUnknown, nil, errors.New("in literal false (expecting 'e')")
+			return tknUnknown, nil, 0, errors.New("in literal false (expecting 'e')")
 
 		case toksN:
 			if c == 'u' {
 				state = toksNu
 				continue DataLoop
 			}
-			return tknUnknown, nil, errors.New("in literal null (expecting 'u')")
+			return tknUnknown, nil, 0, errors.New("in literal null (expecting 'u')")
 
 		case toksNu:
 			if c == 'l' {
 				state = toksNul
 				continue DataLoop
 			}
-			return tknUnknown, nil, errors.New("in literal null (expecting 'l')")
+			return tknUnknown, nil, 0, errors.New("in literal null (expecting 'l')")
 
 		case toksNul:
 			if c == 'l' {
 				tokenType = tknNull
 				break DataLoop
 			}
-			return tknUnknown, nil, errors.New("in literal null (expecting 'l')")
+			return tknUnknown, nil, 0, errors.New("in literal null (expecting 'l')")
 
 		}
 	}
@@ -476,10 +478,11 @@ DataLoop:
 
 	endPos := dataPos
 	tokenData := tkn.data[startPos:endPos]
+	tokenDataLen := endPos - startPos
 
 	// Update the scanners state
 	tkn.pos = dataPos
 
-	return tokenType, tokenData, nil
+	return tokenType, tokenData, tokenDataLen, nil
 
 }
