@@ -19,7 +19,7 @@ import (
 // LHS                      = ConstFuncExpr | Boolean | Field | Value
 // RHS                      = ConstFuncExpr | Boolean | Value | Field
 // CompareOp                = "=" | "<>" | ">" | ">=" | "<" | "<="
-// CheckOp                  = "EXISTS" | ( "IS" [ "NOT" ] ( NULL | MISSING ) )
+// CheckOp                  = ( "IS" [ "NOT" ] ( NULL | MISSING ) )
 // Field                    = { @"-" } OnePath { "." OnePath } { MathOp MathValue }
 // OnePath                  = ( PathFuncExpression | StringType ){ ArrayIndex }
 // StringType               = @String | @Ident | @RawString | @Char
@@ -39,9 +39,10 @@ import (
 // MathOp                   = @"+" | @"-" | @"*" | @"/" | @"%"
 // MathValue                = @Int | @Float
 // OnePathFuncNoArgName     = "META"
-// BooleanFuncExpr          = BooleanFuncTwoArgs
+// BooleanFuncExpr          = BooleanFuncTwoArgs | ExistsClause
 // BooleanFuncTwoArgs       = BooleanFuncTwoArgsName "(" ConstFuncArgument "," ConstFuncArgumentRHS ")"
 // BooleanFuncTwoArgsName   = "REGEXP_CONTAINS"
+// ExistsClause              = ( "EXISTS" "(" Field ")" )
 
 type FilterExpression struct {
 	AndConditions []*FEAndCondition   `( @@ { "OR" @@ } )`
@@ -868,14 +869,9 @@ func (f *FECompareOp) OutputExpression(lhs Expression, rhs Expression) (Expressi
 }
 
 type FECheckOp struct {
-	Exists  *bool `@"EXISTS" | ( "IS"`
-	Not     *bool `[ @"NOT" ]`
+	Not     *bool `( "IS" [ @"NOT" ]`
 	Null    *bool `( @"NULL" |`
 	Missing *bool `@"MISSING" ) )`
-}
-
-func (feco *FECheckOp) IsExists() bool {
-	return feco.Exists != nil && *feco.Exists == true
 }
 
 func (feco *FECheckOp) isNot() bool {
@@ -907,9 +903,7 @@ func (feco *FECheckOp) IsNotNull() bool {
 }
 
 func (feco *FECheckOp) String() string {
-	if feco.IsExists() {
-		return OperatorExists
-	} else if feco.IsMissing() {
+	if feco.IsMissing() {
 		return OperatorMissing
 	} else if feco.IsNotMissing() {
 		return OperatorNotMissing
@@ -923,7 +917,7 @@ func (feco *FECheckOp) String() string {
 }
 
 func (f *FECheckOp) OutputExpression(subExpr Expression) (Expression, error) {
-	if f.IsExists() || f.IsNotMissing() {
+	if f.IsNotMissing() {
 		return ExistsExpr{
 			subExpr,
 		}, nil
@@ -1279,22 +1273,27 @@ func (arg *FEConstFuncTwoArgsName) OutputExpression() (string, error) {
 }
 
 type FEBooleanFuncExpr struct {
-	BooleanFuncTwoArgs *FEBooleanFuncTwoArgs `@@`
+	BooleanFuncTwoArgs *FEBooleanFuncTwoArgs `@@ |`
+	ExistsClause       *FEExistsClause       `@@`
 }
 
-func (e *FEBooleanFuncExpr) String() string {
-	if e.BooleanFuncTwoArgs != nil {
-		return e.BooleanFuncTwoArgs.String()
+func (f *FEBooleanFuncExpr) String() string {
+	if f.BooleanFuncTwoArgs != nil {
+		return f.BooleanFuncTwoArgs.String()
+	} else if f.ExistsClause != nil {
+		return f.ExistsClause.String()
 	} else {
 		return "?? (FEBooleanFuncExpr)"
 	}
 }
 
 func (f *FEBooleanFuncExpr) OutputExpression() (Expression, error) {
-	if f.BooleanFuncTwoArgs == nil {
-		return nil, fmt.Errorf("Invalid FEBooleanFuncExpr")
+	if f.BooleanFuncTwoArgs != nil {
+		return f.BooleanFuncTwoArgs.OutputExpression()
+	} else if f.ExistsClause != nil {
+		return f.ExistsClause.OutputExpression()
 	}
-	return f.BooleanFuncTwoArgs.OutputExpression()
+	return nil, fmt.Errorf("Invalid FEBooleanFuncExpr")
 }
 
 type FEBooleanFuncTwoArgs struct {
@@ -1356,6 +1355,32 @@ func (n *FEBooleanFuncTwoArgsName) OutputExpression() (Expression, error) {
 	} else {
 		return nil, ErrorNotFound
 	}
+}
+
+type FEExistsClause struct {
+	Field *FEField `( "EXISTS" "(" @@ ")" )`
+}
+
+func (f *FEExistsClause) String() string {
+	if f.Field != nil {
+		return fmt.Sprintf("%v ( %v )", OperatorExists, f.Field.String())
+	} else {
+		return "?? (FEExistsClause)"
+	}
+}
+
+func (f *FEExistsClause) OutputExpression() (Expression, error) {
+	if f.Field != nil {
+		fieldExpr, err := f.Field.OutputExpression()
+		if err != nil {
+			return nil, err
+		}
+		return ExistsExpr{
+			fieldExpr,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("Invalid FEExistsClause %v", f.String())
 }
 
 func parserWrapper(parser *participle.Parser, expression string, fe *FilterExpression, err *error) {
