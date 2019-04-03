@@ -271,7 +271,7 @@ func TestFilterExpressionParser(t *testing.T) {
 	assert.Equal("metaKey", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[1].String())
 	assert.True(fe.AndConditions[0].OrConditions[0].Operand.Op.IsEqual())
 	assert.Equal("value", fe.AndConditions[0].OrConditions[0].Operand.RHS.Value.String())
-	err = parser.ParseString("`[$%XDCRInternalMeta*%$]`.metaKey EXISTS AND `[$%XDCRInternalMeta*%$]`.metaKey = \"value\"", fe)
+	err = parser.ParseString("EXISTS (`[$%XDCRInternalMeta*%$]`.metaKey) AND `[$%XDCRInternalMeta*%$]`.metaKey = \"value\"", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
@@ -597,5 +597,9 @@ func TestFilterExpressionParser(t *testing.T) {
 	_, _, err = NewFilterExpressionParser("REGEXP_CONTAINS(METAS().ID(), \"something)")
 	assert.NotNil(err)
 	_, _, err = NewFilterExpressionParser("`field is unfinished = \"unfinished_value")
+	assert.NotNil(err)
+
+	// Discontinued
+	_, _, err = NewFilterExpressionParser("SomeKey EXISTS")
 	assert.NotNil(err)
 }
