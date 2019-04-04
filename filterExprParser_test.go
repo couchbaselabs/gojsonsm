@@ -649,4 +649,9 @@ func TestFilterExpressionParser(t *testing.T) {
 	// Discontinued
 	_, _, err = NewFilterExpressionParser("SomeKey EXISTS")
 	assert.NotNil(err)
+
+	// Invalid operators
+	_, fe, err = NewFilterExpressionParser("field >< \"value\"")
+	_, err = fe.OutputExpression()
+	assert.NotNil(err)
 }

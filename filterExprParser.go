@@ -782,6 +782,19 @@ type FEOpChar struct {
 	GreaterThan *bool `@">" )`
 }
 
+func (f *FEOpChar) String() string {
+	if f.Not != nil {
+		return "!"
+	} else if f.Equal != nil {
+		return "="
+	} else if f.LessThan != nil {
+		return "<"
+	} else if f.GreaterThan != nil {
+		return ">"
+	}
+	return ""
+}
+
 type FECompareOp struct {
 	OpChars0 *FEOpChar `@@`
 	OpChars1 *FEOpChar `[ @@ ]`
@@ -837,7 +850,18 @@ func (feo *FECompareOp) String() string {
 	} else if feo.IsLessThanOrEqualTo() {
 		return OperatorLessThanEq
 	}
-	return "?? (FECompareOp)"
+	var invalidOp []string
+	if feo.OpChars0 != nil {
+		invalidOp = append(invalidOp, feo.OpChars0.String())
+	}
+	if feo.OpChars1 != nil {
+		invalidOp = append(invalidOp, feo.OpChars1.String())
+	}
+	if len(invalidOp) > 0 {
+		return strings.Join(invalidOp, "")
+	} else {
+		return "?? (FECompareOp)"
+	}
 }
 
 func (f *FECompareOp) OutputExpression(lhs Expression, rhs Expression) (Expression, error) {
