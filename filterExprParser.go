@@ -18,7 +18,7 @@ import (
 // BooleanExpr              = Boolean | BooleanFuncExpr
 // LHS                      = ConstFuncExpr | Boolean | Field | Value
 // RHS                      = ConstFuncExpr | Boolean | Value | Field
-// CompareOp                = "=" | "<>" | ">" | ">=" | "<" | "<="
+// CompareOp                = "=" | "==" | "<>" | "!=" | ">" | ">=" | "<" | "<="
 // CheckOp                  = ( "IS" [ "NOT" ] ( NULL | MISSING ) )
 // Field                    = { @"-" } OnePath { "." OnePath } { MathOp MathValue }
 // OnePath                  = ( PathFuncExpression | StringType ){ ArrayIndex }
@@ -776,7 +776,8 @@ func (f *FEValue) OutputExpression() (Expression, error) {
 // and go to the other type of operands
 
 type FEOpChar struct {
-	Equal       *bool `( @"=" |`
+	Not         *bool `( @"!" |`
+	Equal       *bool `@"=" |`
 	LessThan    *bool `@"<" |`
 	GreaterThan *bool `@">" )`
 }
@@ -788,12 +789,18 @@ type FECompareOp struct {
 
 func (feo *FECompareOp) IsEqual() bool {
 	// =
-	return feo.OpChars0 != nil && feo.OpChars0.Equal != nil && feo.OpChars1 == nil
+	singleEq := feo.OpChars0 != nil && feo.OpChars0.Equal != nil && feo.OpChars1 == nil
+	// ==
+	doubleEq := feo.OpChars0 != nil && feo.OpChars0.Equal != nil && feo.OpChars1 != nil && feo.OpChars1.Equal != nil
+	return singleEq || doubleEq
 }
 
 func (feo *FECompareOp) IsNotEqual() bool {
+	// !=
+	notEqual0 := feo.OpChars0 != nil && feo.OpChars0.Not != nil && feo.OpChars1 != nil && feo.OpChars1.Equal != nil
 	// <>
-	return feo.OpChars0 != nil && feo.OpChars0.LessThan != nil && feo.OpChars1 != nil && feo.OpChars1.GreaterThan != nil
+	notEqual1 := feo.OpChars0 != nil && feo.OpChars0.LessThan != nil && feo.OpChars1 != nil && feo.OpChars1.GreaterThan != nil
+	return notEqual0 || notEqual1
 }
 
 func (feo *FECompareOp) IsGreaterThan() bool {
@@ -887,7 +894,7 @@ func (feco *FECheckOp) isMissingInternal() bool {
 }
 
 func (feco *FECheckOp) IsNotMissing() bool {
-	return feco.isNot() && feco.IsMissing()
+	return feco.isNot() && feco.isMissingInternal()
 }
 
 func (feco *FECheckOp) IsNull() bool {

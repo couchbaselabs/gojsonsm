@@ -159,6 +159,10 @@ func TestFilterExpressionParser(t *testing.T) {
 	assert.Equal("path", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[1].String())
 	assert.True(fe.AndConditions[0].OrConditions[0].Operand.Op.IsEqual())
 	assert.Equal("value", fe.AndConditions[0].OrConditions[0].Operand.RHS.Value.String())
+	// Test double equal is the same as single eq
+	err = parser.ParseString("fieldpath.path == \"value\"", fe)
+	assert.Nil(err)
+	assert.True(fe.AndConditions[0].OrConditions[0].Operand.Op.IsEqual())
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -421,6 +425,45 @@ func TestFilterExpressionParser(t *testing.T) {
 	udMarsh, _ = json.Marshal(userData)
 	match, err = m.Match(udMarsh)
 	assert.True(match)
+	// Use same data as above, test IS NOT NULL
+	err = parser.ParseString("fieldpath.path IS NOT NULL AND fieldpath.path IS NOT MISSING", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	// Test IS NULL
+	fe = &FilterExpression{}
+	err = parser.ParseString("fieldpath.path IS NULL", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	userData = map[string]interface{}{
+		"fieldpath": map[string]interface{}{
+			"path": nil,
+		},
+	}
+	udMarsh, _ = json.Marshal(userData)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+	// Use above data, test IS MISSING
+	fe = &FilterExpression{}
+	err = parser.ParseString("fieldpath.path2 IS MISSING", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("fieldpath.path <> POW(ABS(CEIL(PI())),2)", fe)
@@ -430,6 +473,10 @@ func TestFilterExpressionParser(t *testing.T) {
 	assert.True(fe.AndConditions[0].OrConditions[0].Operand.Op.IsNotEqual())
 	assert.Equal("POW", fe.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncTwoArgs.ConstFuncTwoArgsName.String())
 	assert.Equal("ABS", fe.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncTwoArgs.Argument0.SubFunc.ConstFuncOneArg.ConstFuncOneArgName.String())
+	// Test second not equals
+	err = parser.ParseString("fieldpath.path != POW(ABS(CEIL(PI())),2)", fe)
+	assert.Nil(err)
+	assert.True(fe.AndConditions[0].OrConditions[0].Operand.Op.IsNotEqual())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("REGEXP_CONTAINS(`[$%XDCRInternalKey*%$]`, \"^xyz*\")", fe)
