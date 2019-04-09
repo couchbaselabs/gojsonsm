@@ -23,7 +23,7 @@ import (
 // Field                    = { @"-" } OnePath { "." OnePath } { MathOp MathValue }
 // OnePath                  = ( PathFuncExpression | StringType ){ ArrayIndex }
 // StringType               = @String | @Ident | @RawString | @Char
-// ArrayIndex               = "[" [ @"-" ] @Int "]"
+// ArrayIndex               = "[" @Int "]"
 // Value                    = @String
 // ConstFuncExpr            = ConstFuncNoArg | ConstFuncOneArg | ConstFuncTwoArgs
 // ConstFuncNoArg           = ConstFuncNoArgName "(" ")"
