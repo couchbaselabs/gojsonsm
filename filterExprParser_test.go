@@ -206,7 +206,7 @@ func TestFilterExpressionParser(t *testing.T) {
 	userData = map[string]interface{}{
 		"onePath": map[string]interface{}{
 			"field1": -2,
-			"field2": 2,
+			"field2": 2e30,
 		},
 	}
 	udMarsh, _ = json.Marshal(userData)

@@ -302,9 +302,26 @@ func (val FastVal) ToJsonString() (FastVal, error) {
 	return val, errors.New("invalid type coercion")
 }
 
+func (val FastVal) floatToIntOverflows() bool {
+	floatVal := val.GetFloat()
+
+	// Instead of using math constants that could potentially lead to rounding errors,
+	// force a float-to-float comparison here
+	if !(floatVal >= math.MinInt64 && floatVal <= math.MaxInt64) {
+		return true
+	} else {
+		return false
+	}
+}
+
 func (val FastVal) compareInt(other FastVal) int {
+	if other.dataType == FloatValue && other.floatToIntOverflows() {
+		return val.compareFloat(other)
+	}
+
 	intVal := val.AsInt()
 	intOval := other.AsInt()
+
 	if intVal < intOval {
 		return -1
 	} else if intVal > intOval {
