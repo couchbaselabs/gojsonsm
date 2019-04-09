@@ -8,6 +8,7 @@ expression matching against JSON data.
 - Precompile expressions to the most efficient execution-time format.
 - Single-Pass complex expression matching
 - Zero allocations at match-time (this is really related to high-speed matching)
+- N1QL-like parser to allow simplified expression entry.
 
 # Match Tree
 The match tree represents the implied schema of a document, as described by
