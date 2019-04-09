@@ -630,6 +630,28 @@ func TestFilterExpressionParser(t *testing.T) {
 	err = parser.ParseString("achievement * 2 +1", fe)
 	assert.NotNil(err)
 
+	// Test unicode
+	_, fe, err = NewFilterExpressionParser("face == \"😂\"")
+	expr, err = fe.OutputExpression()
+	matchDef = trans.Transform([]Expression{expr})
+	assert.Nil(err)
+	m = NewFastMatcher(matchDef)
+	userData = map[string]interface{}{
+		"face": "😂",
+		"中文":   "白人看不懂",
+	}
+	udMarsh, _ = json.Marshal(userData)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	_, fe, err = NewFilterExpressionParser("中文 IS NOT NULL AND REGEXP_CONTAINS(中文, \"白人\")")
+	expr, err = fe.OutputExpression()
+	matchDef = trans.Transform([]Expression{expr})
+	assert.Nil(err)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
 	// Typos
 	_, _, err = NewFilterExpressionParser("REGEX_CONTAINS(KEY, \"something\")")
 	assert.NotNil(err)
