@@ -87,8 +87,8 @@ const (
 // or not a valid expression is valid prior to passing into the FilterExpression Parser
 var GojsonsmOperators []string = []string{OperatorOr, OperatorAnd, OperatorNot, OperatorTrue,
 	OperatorFalse, OperatorMeta, OperatorEquals, OperatorEquals2, OperatorNotEquals, OperatorNotEquals2, OperatorGreaterThan,
-	OperatorGreaterThanEq, OperatorExists, OperatorMissing, OperatorNotMissing, OperatorNull, OperatorNotNull,
-	/* BooleanFuncs*/ FuncRegexp}
+	OperatorGreaterThanEq, OperatorLessThan, OperatorLessThanEq, OperatorExists, OperatorMissing, OperatorNotMissing,
+	OperatorNull, OperatorNotNull /* BooleanFuncs*/, FuncRegexp}
 
 // Error constants
 var emptyExpression Expression
