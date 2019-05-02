@@ -196,7 +196,7 @@ func TestFilterExpressionParser(t *testing.T) {
 	assert.True(match)
 
 	fe = &FilterExpression{}
-	err = parser.ParseString("onePath.field1 < onePath.field2", fe)
+	err = parser.ParseString("EXISTS(onePath) AND onePath IS NOT NULL AND onePath.field1 < onePath.field2", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
@@ -208,8 +208,58 @@ func TestFilterExpressionParser(t *testing.T) {
 			"field1": -2,
 			"field2": 2e30,
 		},
+		"onePathCopy": map[string]interface{}{
+			"field1": -2,
+			"field2": 2e30,
+		},
+		"oneVar":  true,
+		"oneList": []uint16{1, 2, 3, 4},
 	}
 	udMarsh, _ = json.Marshal(userData)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("EXISTS(onePath) AND onePath.field1 <> onePath.field2", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("EXISTS(oneVar)", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("EXISTS(onePath) AND EXISTS(onePath.field1) AND EXISTS(oneList)", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("onePath = onePathCopy", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
 	match, err = m.Match(udMarsh)
 	assert.True(match)
 
@@ -227,24 +277,6 @@ func TestFilterExpressionParser(t *testing.T) {
 	userData = map[string]interface{}{
 		"onePath.Only": -2,
 	}
-	udMarsh, _ = json.Marshal(userData)
-	match, err = m.Match(udMarsh)
-	assert.True(match)
-	userData = map[string]interface{}{}
-	udMarsh, _ = json.Marshal(userData)
-	m.Reset()
-	match, err = m.Match(udMarsh)
-	assert.True(match)
-
-	fe = &FilterExpression{}
-	err = parser.ParseString("onePath.field1 <> onePath.field2", fe)
-	assert.Nil(err)
-	expr, err = fe.OutputExpression()
-	assert.Nil(err)
-	matchDef = trans.Transform([]Expression{expr})
-	assert.NotNil(matchDef)
-	m = NewFastMatcher(matchDef)
-	userData = map[string]interface{}{}
 	udMarsh, _ = json.Marshal(userData)
 	match, err = m.Match(udMarsh)
 	assert.True(match)
@@ -558,6 +590,17 @@ func TestFilterExpressionParser(t *testing.T) {
 	match, err = m.Match(udMarsh)
 	assert.True(match)
 	assert.Nil(err)
+
+	// Check Exists on maps or arrays
+	fe = &FilterExpression{}
+	err = parser.ParseString("EXISTS(achievements) AND EXISTS(achievements[0])", fe)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
 
 	// MB-33014 - Numeric operation on a field
 	fe = &FilterExpression{}
