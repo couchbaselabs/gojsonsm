@@ -548,6 +548,7 @@ func (m *FastMatcher) matchExec(token tokenType, tokenData []byte, tokenDataLen 
 			}
 		}
 	} else if token == tknObjectStart {
+		objStartPos := m.tokens.Position()
 		if len(node.Elems) == 0 {
 			// If we have no element handlers, we can just skip the whole thing...
 			m.skipValue(token)
@@ -565,7 +566,21 @@ func (m *FastMatcher) matchExec(token tokenType, tokenData []byte, tokenDataLen 
 				return nil
 			}
 		}
+		objEndPos := m.tokens.Position()
+
+		objFastVal := NewObjectFastVal(m.tokens.data[objStartPos:objEndPos])
+		for _, op := range node.Ops {
+			err := m.matchOp(&op, &objFastVal)
+			if err != nil {
+				return err
+			}
+
+			if m.buckets.IsResolved(0) {
+				return nil
+			}
+		}
 	} else if token == tknArrayStart {
+		arrayStartPos := m.tokens.Position()
 		if len(node.Loops) == 0 {
 			err, shouldReturn := m.matchObjectOrArray(token, tokenData, node)
 			if shouldReturn {
@@ -600,6 +615,20 @@ func (m *FastMatcher) matchExec(token tokenType, tokenData []byte, tokenDataLen 
 				if m.buckets.IsResolved(0) {
 					return nil
 				}
+			}
+
+		}
+		arrayEndPos := m.tokens.Position()
+
+		arrayFastVal := NewArrayFastVal(m.tokens.data[arrayStartPos:arrayEndPos])
+		for _, op := range node.Ops {
+			err := m.matchOp(&op, &arrayFastVal)
+			if err != nil {
+				return err
+			}
+
+			if m.buckets.IsResolved(0) {
+				return nil
 			}
 		}
 	} else {
