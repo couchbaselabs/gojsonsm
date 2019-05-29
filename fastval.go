@@ -381,6 +381,15 @@ func (val FastVal) compareTime(other FastVal) int {
 	thisTime := val.AsTime()
 	otherTime := other.AsTime()
 
+	// Consider nil value as the smaller/earlier than non-nil values
+	if thisTime == nil && otherTime == nil {
+		return 0
+	} else if otherTime == nil && thisTime != nil {
+		return 1
+	} else if otherTime != nil && thisTime == nil {
+		return -1
+	}
+
 	if thisTime.Equal(*otherTime) {
 		return 0
 	} else if thisTime.After(*otherTime) {
