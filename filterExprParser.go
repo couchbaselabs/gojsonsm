@@ -22,7 +22,7 @@ import (
 // CheckOp                  = ( "IS" [ "NOT" ] ( NULL | MISSING ) )
 // Field                    = { @"-" } OnePath { "." OnePath } { MathOp MathValue }
 // OnePath                  = ( PathFuncExpression | StringType ){ ArrayIndex }
-// StringType               = @String | @Ident | @RawString | @Char
+// StringType               = @Ident | @RawString | @Char
 // ArrayIndex               = "[" @Int "]"
 // Value                    = @String
 // ConstFuncExpr            = ConstFuncNoArg | ConstFuncOneArg | ConstFuncTwoArgs
@@ -489,10 +489,6 @@ func (fef *FEField) String() string {
 func (f *FEField) OutputExpression() (Expression, error) {
 	var outExpr FieldExpr
 
-	if f.ShouldHandleSpecialValue() {
-		return f.OutputExpressionSpecialAsValue()
-	}
-
 	for _, onePath := range f.Path {
 		pathName, arrays, err := onePath.OutputOnePath()
 		if err != nil {
@@ -538,33 +534,14 @@ func (f *FEField) OutputExpression() (Expression, error) {
 	}
 }
 
-// The problem with this parser is that if FEField is prioritized higher than FEValue, then
-// it's possible that a valid FEValue gets captured by FEField as it will soak up any valid @String
-// or @Ident. Thus any date constant values will be put in the same category as @String and gets captured.
-// This is a hack that should get around it until there's a better way to do this
-// Normally, this isn't a problem because there is FERhs vs FELhs, of which FERhs will prioritize value
-// over field. In the DATE() function, however, it doesn't have this luxury to prioritize value or field
-// since it only has one variable.
-func (f *FEField) ShouldHandleSpecialValue() bool {
-	if len(f.Path) == 1 {
-		if iso8601Year.MatchString(f.Path[0].String()) ||
-			iso8601YearAndMonth.MatchString(f.Path[0].String()) ||
-			iso8601CompleteDate.MatchString(f.Path[0].String()) {
-			return true
-		}
-	}
-	return false
-}
-
 func (f *FEField) OutputExpressionSpecialAsValue() (Expression, error) {
 	return ValueExpr{f.Path[0].String()}, nil
 }
 
 type FEStringType struct {
-	EscapedStrVal string `( @String  |`
-	CharVal       string `@Char |`
-	RawStr        string `@RawString |`
-	StrValue      string `@Ident )`
+	CharVal  string `( @Char |`
+	RawStr   string `@RawString |`
+	StrValue string `@Ident )`
 }
 
 func (f *FEStringType) String() string {
@@ -574,8 +551,6 @@ func (f *FEStringType) String() string {
 		return f.RawStr
 	} else if len(f.StrValue) > 0 {
 		return f.StrValue
-	} else if len(f.EscapedStrVal) > 0 {
-		return f.EscapedStrVal
 	} else {
 		return ""
 	}
@@ -1139,7 +1114,14 @@ func (f *FEConstFuncOneArg) OutputExpression() (Expression, error) {
 		return outExpr, err
 	}
 	outExpr.Params = append(outExpr.Params, arg)
-	return outExpr, nil
+
+	// Special handling for DATE function - check to make sure user entered the correct date format
+	// if they used a value instead of a field
+	if f.ConstFuncOneArgName.Date != nil && f.Argument != nil && f.Argument.Argument != nil && !validTimeChecker(f.Argument.String()) {
+		err = fmt.Errorf("Invalid DATE format specified: %v", f.Argument.String())
+	}
+
+	return outExpr, err
 }
 
 type FEConstFuncOneArgName struct {

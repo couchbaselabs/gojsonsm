@@ -426,6 +426,26 @@ func TestFilterExpressionParser(t *testing.T) {
 	assert.True(match)
 
 	fe = &FilterExpression{}
+	err = parser.ParseString("DATE(fieldpath.path) > DATE(\"2019-01-01\") AND DATE(fieldpath.path) < DATE('2019-01-01T23:59:59.999Z') AND DATE(fieldpath.path) < DATE('2019-01-01T23:59:59.999-01:00')", fe)
+	assert.Nil(err)
+	assert.Equal("DATE", fe.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.ConstFuncOneArgName.String())
+	assert.Equal("2019-01-01", fe.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.String())
+	assert.Nil(fe.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	userData = map[string]interface{}{
+		"fieldpath": map[string]interface{}{
+			"path": "2019-01-01 23:59:59",
+		},
+	}
+	udMarsh, _ = json.Marshal(userData)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
 	err = parser.ParseString("fieldpath.path = DATE(`field with spaces`)", fe)
 	assert.Nil(err)
 	assert.Equal("fieldpath", fe.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[0].String())
@@ -719,4 +739,26 @@ func TestFilterExpressionParser(t *testing.T) {
 	_, fe, err = NewFilterExpressionParser("field >< \"value\"")
 	_, err = fe.OutputExpression()
 	assert.NotNil(err)
+
+	// Invalid date format
+	_, fe, err = NewFilterExpressionParser(`DATE(updated) < DATE("2010-07-2220:22:20Z")`)
+	_, err = fe.OutputExpression()
+	assert.NotNil(err)
+
+	// For invalid date values, it will always return -1
+	fe = &FilterExpression{}
+	err = parser.ParseString("DATE(fieldpath.path) < DATE(\"2019-01-01\")", fe)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	userData = map[string]interface{}{
+		"fieldpath": map[string]interface{}{
+			"path": "2019-01-01 27:59:59",
+		},
+	}
+	udMarsh, _ = json.Marshal(userData)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
 }
