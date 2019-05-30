@@ -133,8 +133,10 @@ func (f *FilterExpression) outputExpressionNoParenCheck() (Expression, error) {
 
 // Outputs the head of the Expression match tree of which represents everything underneath
 func (f *FilterExpression) OutputExpression() (Expression, error) {
-	if f.GetTotalOpenParens() != f.GetTotalCloseParens() {
-		return nil, ErrorMalformedParenthesis
+	openParens := f.GetTotalOpenParens()
+	closeParens := f.GetTotalCloseParens()
+	if openParens != closeParens {
+		return nil, fmt.Errorf("%s: found %v open parentheses and %v close parentheses", ErrorMalformedParenthesis, openParens, closeParens)
 	}
 
 	return f.outputExpressionNoParenCheck()
