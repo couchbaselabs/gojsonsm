@@ -5,6 +5,7 @@ package gojsonsm
 import (
 	"encoding/json"
 	"github.com/stretchr/testify/assert"
+	"strings"
 	"testing"
 )
 
@@ -674,13 +675,15 @@ func TestFilterExpressionParser(t *testing.T) {
 	err = parser.ParseString("(TRUE) OR FALSE)", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
-	assert.Equal(ErrorMalformedParenthesis, err)
+	assert.NotNil(err)
+	assert.True(strings.Contains(err.Error(), ErrorMalformedParenthesis.Error()))
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("(((TRUE) OR FALSE) OR FALSE))", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
-	assert.Equal(ErrorMalformedParenthesis, err)
+	assert.NotNil(err)
+	assert.True(strings.Contains(err.Error(), ErrorMalformedParenthesis.Error()))
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("TRUE", fe)
