@@ -118,6 +118,12 @@ func TestFilterExpressionParser(t *testing.T) {
 	assert.Nil(err)
 
 	fe = &FilterExpression{}
+	err = parser.ParseString("((TRUE OR FALSE) AND (FALSE OR TRUE)) OR (TRUE AND TRUE)", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+
+	fe = &FilterExpression{}
 	err = parser.ParseString("NOT NOT NOT TRUE", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
@@ -745,7 +751,7 @@ func TestFilterExpressionParser(t *testing.T) {
 	_, err = fe.OutputExpression()
 	assert.NotNil(err)
 
-	// For invalid date values, it will always return -1
+	// For invalid date values, it will be nil and should be smaller than any other valids
 	fe = &FilterExpression{}
 	err = parser.ParseString("DATE(fieldpath.path) < DATE(\"2019-01-01\")", fe)
 	expr, err = fe.OutputExpression()
@@ -761,4 +767,9 @@ func TestFilterExpressionParser(t *testing.T) {
 	udMarsh, _ = json.Marshal(userData)
 	match, err = m.Match(udMarsh)
 	assert.True(match)
+
+	// Invalid parenthesis
+	_, fe, err = NewFilterExpressionParser("((TRUE OR FALSE () AND TRUE))")
+	_, err = fe.OutputExpression()
+	assert.NotNil(err)
 }
