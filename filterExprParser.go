@@ -102,13 +102,8 @@ func (fe *FilterExpression) String() string {
 	return strings.Join(output, " ")
 }
 
-// Outputs the head of the Expression match tree of which represents everything underneath
-func (f *FilterExpression) OutputExpression() (Expression, error) {
+func (f *FilterExpression) outputExpressionNoParenCheck() (Expression, error) {
 	var outExpr OrExpr
-
-	if f.GetTotalOpenParens() != f.GetTotalCloseParens() {
-		return outExpr, ErrorMalformedParenthesis
-	}
 
 	for _, oneExpr := range f.AndConditions {
 		andExpr, err := oneExpr.OutputExpression()
@@ -123,7 +118,7 @@ func (f *FilterExpression) OutputExpression() (Expression, error) {
 		combinedExpr = append(combinedExpr, outExpr)
 
 		for _, subFilterExpr := range f.SubFilterExpr {
-			subExpr, err := subFilterExpr.OutputExpression()
+			subExpr, err := subFilterExpr.outputExpressionNoParenCheck()
 			if err != nil {
 				return combinedExpr, err
 			}
@@ -134,6 +129,15 @@ func (f *FilterExpression) OutputExpression() (Expression, error) {
 	} else {
 		return outExpr, nil
 	}
+}
+
+// Outputs the head of the Expression match tree of which represents everything underneath
+func (f *FilterExpression) OutputExpression() (Expression, error) {
+	if f.GetTotalOpenParens() != f.GetTotalCloseParens() {
+		return nil, ErrorMalformedParenthesis
+	}
+
+	return f.outputExpressionNoParenCheck()
 }
 
 type FEOpenParen struct {
