@@ -11,8 +11,9 @@ import (
 
 // EBNF Grammar describing the parser
 
-// FilterExpression         = ( AndCondition { "OR" AndCondition } ) { "AND" FilterExpression }
-// AndCondition             = { OpenParens } Condition { "AND" Condition } { CloseParen }
+// FilterExpression         = ( "(" FilterExpression ")" { "AND" FilterExpression } { "OR" FilterExpression } ) | InnerExpression { "AND" FilterExpression }
+// InnerExpression          =  AndCondition { "OR" AndCondition }
+// AndCondition             =  Condition { "AND" Condition }
 // Condition                = ( [ "NOT" ] Condition ) | Operand
 // Operand                  = BooleanExpr | ( LHS ( CheckOp | ( CompareOp RHS) ) )
 // BooleanExpr              = Boolean | BooleanFuncExpr
@@ -45,39 +46,142 @@ import (
 // ExistsClause              = ( "EXISTS" "(" Field ")" )
 
 type FilterExpression struct {
-	AndConditions []*FEAndCondition   `( @@ { "OR" @@ } )`
-	SubFilterExpr []*FilterExpression `{ "AND" @@ }`
+	OpenParen              *FEOpenParen       `( @@ `
+	SubFilterExpr          *FilterExpression  `@@`
+	CloseParen             *FECloseParen      ` @@`
+	AndContinuation        *FilterExpression  `{ "AND" @@ }`
+	OrContinuation         *FilterExpression  `{ "OR" @@ }) |`
+	FilterExpr             *FEInnerExpression `@@`
+	FilterExprContinuation *FilterExpression  `{ "AND" @@ }`
+}
+
+func (f *FilterExpression) String() string {
+	var output []string
+	if f.FilterExpr != nil {
+		output = append(output, f.FilterExpr.String())
+		if f.FilterExprContinuation != nil {
+			output = append(output, OperatorAnd)
+			output = append(output, f.FilterExprContinuation.String())
+		}
+	} else {
+		if f.OpenParen != nil {
+			output = append(output, f.OpenParen.String())
+		}
+		if f.SubFilterExpr != nil {
+			output = append(output, f.SubFilterExpr.String())
+		}
+		if f.CloseParen != nil {
+			output = append(output, f.CloseParen.String())
+		}
+		if f.AndContinuation != nil {
+			output = append(output, OperatorAnd)
+			output = append(output, f.AndContinuation.String())
+		} else if f.OrContinuation != nil {
+			output = append(output, OperatorOr)
+			output = append(output, f.OrContinuation.String())
+		}
+
+	}
+	if len(output) == 0 {
+		return "?? (FilterExpression)"
+	} else {
+		return strings.Join(output, " ")
+	}
+
+}
+
+func (f *FilterExpression) outputExpressionNoParenCheck() (Expression, error) {
+	if f.FilterExpr != nil {
+		if f.FilterExprContinuation != nil {
+			continuation, err := f.FilterExprContinuation.OutputExpression()
+			if err != nil {
+				return nil, err
+			}
+			filterExpr, err := f.FilterExpr.OutputExpression()
+			if err != nil {
+				return nil, err
+			}
+			var outExpr AndExpr
+			outExpr = append(outExpr, filterExpr)
+			outExpr = append(outExpr, continuation)
+			return outExpr, nil
+		} else {
+			return f.FilterExpr.OutputExpression()
+		}
+	} else if f.SubFilterExpr != nil {
+		subExprOut, err := f.SubFilterExpr.OutputExpression()
+		if err != nil {
+			return nil, err
+		}
+		if f.AndContinuation != nil {
+			var outExpr AndExpr
+			outExpr = append(outExpr, subExprOut)
+			andContinuation, err := f.AndContinuation.OutputExpression()
+			if err != nil {
+				return nil, err
+			}
+			outExpr = append(outExpr, andContinuation)
+			return outExpr, nil
+		} else if f.OrContinuation != nil {
+			var outExpr OrExpr
+			outExpr = append(outExpr, subExprOut)
+			orContinuation, err := f.OrContinuation.OutputExpression()
+			if err != nil {
+				return nil, err
+			}
+			outExpr = append(outExpr, orContinuation)
+			return outExpr, nil
+		} else {
+			return subExprOut, err
+		}
+	} else {
+		return nil, fmt.Errorf("Invalid FilterExpression %v", f.String())
+	}
+}
+
+func (f *FilterExpression) OutputExpression() (Expression, error) {
+	openParens := f.GetTotalOpenParens()
+	closeParens := f.GetTotalCloseParens()
+	if openParens != closeParens {
+		return nil, fmt.Errorf("%s: found %v open parentheses and %v close parentheses", ErrorMalformedParenthesis, openParens, closeParens)
+	}
+
+	return f.outputExpressionNoParenCheck()
 }
 
 func (f *FilterExpression) GetTotalOpenParens() (count int) {
-	if len(f.AndConditions) > 0 {
-		for _, ac := range f.AndConditions {
-			count += ac.GetTotalOpenParens()
-		}
+	if f.OpenParen != nil {
+		count++
 	}
-	if len(f.SubFilterExpr) > 0 {
-		for _, se := range f.SubFilterExpr {
-			count += se.GetTotalOpenParens()
+	if f.SubFilterExpr != nil {
+		count += f.SubFilterExpr.GetTotalOpenParens()
+	} else if f.FilterExpr != nil {
+		if f.FilterExprContinuation != nil {
+			count += f.FilterExprContinuation.GetTotalOpenParens()
 		}
 	}
 	return
 }
 
 func (f *FilterExpression) GetTotalCloseParens() (count int) {
-	if len(f.AndConditions) > 0 {
-		for _, ac := range f.AndConditions {
-			count += ac.GetTotalCloseParens()
-		}
+	if f.CloseParen != nil {
+		count++
 	}
-	if len(f.SubFilterExpr) > 0 {
-		for _, se := range f.SubFilterExpr {
-			count += se.GetTotalCloseParens()
+	if f.SubFilterExpr != nil {
+		count += f.SubFilterExpr.GetTotalCloseParens()
+	} else if f.FilterExpr != nil {
+		if f.FilterExprContinuation != nil {
+			count += f.FilterExprContinuation.GetTotalCloseParens()
 		}
 	}
 	return
 }
 
-func (fe *FilterExpression) String() string {
+type FEInnerExpression struct {
+	AndConditions []*FEAndCondition `( @@ { "OR" @@ } )`
+}
+
+func (fe *FEInnerExpression) String() string {
 	output := []string{}
 
 	first := true
@@ -90,56 +194,21 @@ func (fe *FilterExpression) String() string {
 		output = append(output, expr.String())
 	}
 
-	for _, expr := range fe.SubFilterExpr {
-		if first {
-			first = false
-		} else {
-			output = append(output, OperatorAnd)
-		}
-		output = append(output, expr.String())
-	}
-
 	return strings.Join(output, " ")
 }
 
-func (f *FilterExpression) outputExpressionNoParenCheck() (Expression, error) {
+func (f *FEInnerExpression) OutputExpression() (Expression, error) {
 	var outExpr OrExpr
 
 	for _, oneExpr := range f.AndConditions {
 		andExpr, err := oneExpr.OutputExpression()
 		if err != nil {
-			return outExpr, err
+			return nil, err
 		}
 		outExpr = append(outExpr, andExpr)
 	}
 
-	if len(f.SubFilterExpr) > 0 {
-		var combinedExpr AndExpr
-		combinedExpr = append(combinedExpr, outExpr)
-
-		for _, subFilterExpr := range f.SubFilterExpr {
-			subExpr, err := subFilterExpr.outputExpressionNoParenCheck()
-			if err != nil {
-				return combinedExpr, err
-			}
-			combinedExpr = append(combinedExpr, subExpr)
-		}
-
-		return combinedExpr, nil
-	} else {
-		return outExpr, nil
-	}
-}
-
-// Outputs the head of the Expression match tree of which represents everything underneath
-func (f *FilterExpression) OutputExpression() (Expression, error) {
-	openParens := f.GetTotalOpenParens()
-	closeParens := f.GetTotalCloseParens()
-	if openParens != closeParens {
-		return nil, fmt.Errorf("%s: found %v open parentheses and %v close parentheses", ErrorMalformedParenthesis, openParens, closeParens)
-	}
-
-	return f.outputExpressionNoParenCheck()
+	return outExpr, nil
 }
 
 type FEOpenParen struct {
@@ -159,37 +228,11 @@ func (fecp *FECloseParen) String() string {
 }
 
 type FEAndCondition struct {
-	OpenParens   []*FEOpenParen  `{ @@ }`
-	OrConditions []*FECondition  `@@ { "AND" @@ }`
-	CloseParens  []*FECloseParen `{ @@ }`
-}
-
-func (f *FEAndCondition) GetTotalOpenParens() (count int) {
-	count += len(f.OpenParens)
-	if len(f.OrConditions) > 0 {
-		for _, cond := range f.OrConditions {
-			count += cond.GetTotalOpenParens()
-		}
-	}
-	return
-}
-
-func (f *FEAndCondition) GetTotalCloseParens() (count int) {
-	count += len(f.CloseParens)
-	if len(f.OrConditions) > 0 {
-		for _, cond := range f.OrConditions {
-			count += cond.GetTotalCloseParens()
-		}
-	}
-	return
+	OrConditions []*FECondition `@@ { "AND" @@ }`
 }
 
 func (ac *FEAndCondition) String() string {
 	output := []string{}
-
-	for _, e := range ac.OpenParens {
-		output = append(output, e.String())
-	}
 
 	first := true
 	for _, e := range ac.OrConditions {
@@ -198,10 +241,6 @@ func (ac *FEAndCondition) String() string {
 		} else {
 			output = append(output, OperatorAnd)
 		}
-		output = append(output, e.String())
-	}
-
-	for _, e := range ac.CloseParens {
 		output = append(output, e.String())
 	}
 
@@ -223,22 +262,6 @@ func (f *FEAndCondition) OutputExpression() (Expression, error) {
 type FECondition struct {
 	Not     *FECondition `"NOT" @@`
 	Operand *FEOperand   `| @@`
-}
-
-func (f *FECondition) GetTotalOpenParens() (count int) {
-	if f.Not != nil {
-		count += f.Not.GetTotalOpenParens()
-	}
-	// Operand has no open or close parens
-	return
-}
-
-func (f *FECondition) GetTotalCloseParens() (count int) {
-	if f.Not != nil {
-		count += f.Not.GetTotalCloseParens()
-	}
-	// Operand has no open or close parens
-	return
 }
 
 func (fec *FECondition) String() string {
