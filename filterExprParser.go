@@ -25,8 +25,8 @@ import (
 // OnePath                  = ( PathFuncExpression | StringType ){ ArrayIndex }
 // StringType               = @Ident | @RawString | @Char
 // ArrayIndex               = "[" @Int "]"
-// Value                    = @String
-// ConstFuncExpr            = ConstFuncNoArg | ConstFuncOneArg | ConstFuncTwoArgs
+// Value                    = @MathValue | @String
+// ConstFuncExpr            = { @"-" } ( ConstFuncNoArg | ConstFuncOneArg | ConstFuncTwoArgs )
 // ConstFuncNoArg           = ConstFuncNoArgName "(" ")"
 // ConstFuncNoArgName       = "PI" | "E"
 // ConstFuncOneArg          = ConstFuncOneArgName "(" ConstFuncArgument ")"
@@ -38,7 +38,7 @@ import (
 // PathFuncExpression       = OnePathFuncNoArg
 // OnePathFuncNoArg         = OnePathFuncNoArgName "(" ")"
 // MathOp                   = @"+" | @"-" | @"*" | @"/" | @"%"
-// MathValue                = @Int | @Float
+// MathValue                = { @"-" } ( @Int | @Float )
 // OnePathFuncNoArgName     = "META"
 // BooleanFuncExpr          = BooleanFuncTwoArgs | ExistsClause
 // BooleanFuncTwoArgs       = BooleanFuncTwoArgsName "(" ConstFuncArgument "," ConstFuncArgumentRHS ")"
@@ -715,15 +715,24 @@ func (f *FEMathArithmeticOp) OutputExpression() (Expression, error) {
 }
 
 type FEMathValue struct {
-	IntValue   *int     `@Int |`
-	FloatValue *float64 `@Float`
+	MathNeg    *bool    `{ @"-" }`
+	IntValue   *int     `( @Int |`
+	FloatValue *float64 `@Float )`
 }
 
 func (f *FEMathValue) String() string {
 	if f.IntValue != nil {
-		return fmt.Sprintf("%v", *f.IntValue)
+		outputVal := *f.IntValue
+		if f.MathNeg != nil && *f.MathNeg {
+			outputVal *= -1
+		}
+		return fmt.Sprintf("%v", outputVal)
 	} else if f.FloatValue != nil {
-		return fmt.Sprintf("%v", *f.FloatValue)
+		outputVal := *f.FloatValue
+		if f.MathNeg != nil && *f.MathNeg {
+			outputVal *= -1
+		}
+		return fmt.Sprintf("%v", outputVal)
 	} else {
 		return "?? (FEMathValue)"
 	}
@@ -731,27 +740,32 @@ func (f *FEMathValue) String() string {
 
 func (f *FEMathValue) OutputExpression() (Expression, error) {
 	if f.IntValue != nil {
-		return ValueExpr{*f.IntValue}, nil
+		outputVal := *f.IntValue
+		if f.MathNeg != nil && *f.MathNeg {
+			outputVal *= -1
+		}
+		return ValueExpr{outputVal}, nil
 	} else if f.FloatValue != nil {
-		return ValueExpr{*f.FloatValue}, nil
+		outputVal := *f.FloatValue
+		if f.MathNeg != nil && *f.MathNeg {
+			outputVal *= -1
+		}
+		return ValueExpr{outputVal}, nil
 	} else {
 		return nil, fmt.Errorf("Invalid FEMathValue %v", f.String())
 	}
 }
 
 type FEValue struct {
-	StrValue   *string  `@String |`
-	IntValue   *int     `@Int |`
-	FloatValue *float64 `@Float`
+	MathVal  *FEMathValue `@@ |`
+	StrValue *string      `@String`
 }
 
 func (fev *FEValue) String() string {
 	if fev.StrValue != nil {
 		return *fev.StrValue
-	} else if fev.IntValue != nil {
-		return fmt.Sprintf("%v", *fev.IntValue)
-	} else if fev.FloatValue != nil {
-		return fmt.Sprintf("%v", *fev.FloatValue)
+	} else if fev.MathVal != nil {
+		return fev.MathVal.String()
 	} else {
 		return "?? (FEValue)"
 	}
@@ -762,14 +776,8 @@ func (f *FEValue) OutputExpression() (Expression, error) {
 		return ValueExpr{
 			*f.StrValue,
 		}, nil
-	} else if f.IntValue != nil {
-		return ValueExpr{
-			*f.IntValue,
-		}, nil
-	} else if f.FloatValue != nil {
-		return ValueExpr{
-			*f.FloatValue,
-		}, nil
+	} else if f.MathVal != nil {
+		return f.MathVal.OutputExpression()
 	} else {
 		return ValueExpr{}, fmt.Errorf("Invalid FEValue: %v", f.String())
 	}
@@ -980,32 +988,52 @@ func (f *FECheckOp) OutputExpression(subExpr Expression) (Expression, error) {
 // Technically we could have an slice of arguments, but having OneArg vs NoArg vs TwoArg could
 // allow us to do more strict function check (i.e. certain funcs should only allow one argument, etc, at this level)
 type FEConstFuncExpression struct {
-	ConstFuncNoArg   *FEConstFuncNoArg   `@@ |`
+	MathNeg          *bool               `{ @"-" }`
+	ConstFuncNoArg   *FEConstFuncNoArg   `( @@ |`
 	ConstFuncOneArg  *FEConstFuncOneArg  `@@ |`
-	ConstFuncTwoArgs *FEConstFuncTwoArgs `@@`
+	ConstFuncTwoArgs *FEConstFuncTwoArgs `@@ )`
 }
 
 func (f *FEConstFuncExpression) String() string {
+	var output []string
+	if f.MathNeg != nil && *f.MathNeg {
+		output = append(output, "-")
+	}
 	if f.ConstFuncNoArg != nil {
-		return f.ConstFuncNoArg.String()
+		output = append(output, f.ConstFuncNoArg.String())
 	} else if f.ConstFuncOneArg != nil {
-		return f.ConstFuncOneArg.String()
+		output = append(output, f.ConstFuncOneArg.String())
 	} else if f.ConstFuncTwoArgs != nil {
-		return f.ConstFuncTwoArgs.String()
+		output = append(output, f.ConstFuncTwoArgs.String())
 	} else {
 		return "?? (FEConstFuncExpression)"
 	}
+	return strings.Join(output, "")
 }
 
 func (f *FEConstFuncExpression) OutputExpression() (Expression, error) {
+	var constFuncExpr Expression
+	var err error
 	if f.ConstFuncNoArg != nil {
-		return f.ConstFuncNoArg.OutputExpression()
+		constFuncExpr, err = f.ConstFuncNoArg.OutputExpression()
 	} else if f.ConstFuncOneArg != nil {
-		return f.ConstFuncOneArg.OutputExpression()
+		constFuncExpr, err = f.ConstFuncOneArg.OutputExpression()
 	} else if f.ConstFuncTwoArgs != nil {
-		return f.ConstFuncTwoArgs.OutputExpression()
+		constFuncExpr, err = f.ConstFuncTwoArgs.OutputExpression()
 	} else {
 		return nil, fmt.Errorf("Invalid FEConstFuncExpression %v", f.String())
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if f.MathNeg != nil && *f.MathNeg {
+		var negateExpr FuncExpr
+		negateExpr.FuncName = MathFuncNeg
+		negateExpr.Params = append(negateExpr.Params, constFuncExpr)
+		return negateExpr, nil
+	} else {
+		return constFuncExpr, nil
 	}
 }
 

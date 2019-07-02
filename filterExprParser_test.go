@@ -354,12 +354,6 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("arrayPath[1].path2.arrayPath3[-10].`multiword array`[20] = fieldpath2.path2", fe)
 	assert.NotNil(err)
-	//	assert.Equal("arrayPath [1]", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[0].String())
-	//	assert.Equal("arrayPath", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[0].StrValue)
-	//	assert.Equal("path2", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[1].StrValue)
-	//	assert.Equal(0, len(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[1].ArrayIndexes))
-	//	assert.Equal("arrayPath3 [-10]", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[2].String())
-	//	assert.Equal("multiword array [20]", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[3].String())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("arrayPath[1].path2.arrayPath3[10].`multiword array`[20] = fieldpath2.path2", fe)
@@ -372,7 +366,7 @@ func TestFilterExpressionParser(t *testing.T) {
 	assert.Equal("multiword array [20]", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[3].String())
 
 	fe = &FilterExpression{}
-	err = parser.ParseString("key < PI()", fe)
+	err = parser.ParseString("key < PI() AND -key < 0 AND key > -PI() AND key < ABS(-PI()) AND key > -ABS(-PI())", fe)
 	assert.Nil(err)
 	assert.Equal("key", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Field.Path[0].String())
 	assert.True(*fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncNoArg.ConstFuncNoArgName.Pi)
@@ -640,6 +634,51 @@ func TestFilterExpressionParser(t *testing.T) {
 	m = NewFastMatcher(matchDef)
 	userData = map[string]interface{}{
 		"achievements": 1,
+	}
+	udMarsh, _ = json.Marshal(userData)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("achievements * -10 = -10 AND achievements * -10.1 = -10.1", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	userData = map[string]interface{}{
+		"achievements": 1,
+	}
+	udMarsh, _ = json.Marshal(userData)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("achievements < -1", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	userData = map[string]interface{}{
+		"achievements": -10,
+	}
+	udMarsh, _ = json.Marshal(userData)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("achievements * -1 > -10", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	userData = map[string]interface{}{
+		"achievements": -10,
 	}
 	udMarsh, _ = json.Marshal(userData)
 	match, err = m.Match(udMarsh)
