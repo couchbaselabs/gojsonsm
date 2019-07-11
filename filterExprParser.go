@@ -17,11 +17,14 @@ import (
 // Condition                = ( [ "NOT" ] Condition ) | Operand
 // Operand                  = BooleanExpr | ( LHS ( CheckOp | ( CompareOp RHS) ) )
 // BooleanExpr              = Boolean | BooleanFuncExpr
-// LHS                      = ConstFuncExpr | Boolean | Field | Value
-// RHS                      = ConstFuncExpr | Boolean | Value | Field
+// LHS                      = ConstFuncExpr | Boolean | FieldWithMath | Value
+// RHS                      = ConstFuncExpr | Boolean | Value | FieldWithMath
 // CompareOp                = "=" | "==" | "<>" | "!=" | ">" | ">=" | "<" | "<="
 // CheckOp                  = ( "IS" [ "NOT" ] ( NULL | MISSING ) )
-// Field                    = { @"-" } OnePath { "." OnePath } { MathOp MathValue }
+// FieldWithMath            = FieldWMathType0 | FieldWMathType1
+// FieldWMathType0          = MathValue MathOp Field
+// FieldWMathType1          = Field { MathOp ( MathValue | Field ) }
+// Field                    = { @"-" } OnePath { "." OnePath }
 // OnePath                  = ( PathFuncExpression | StringType ){ ArrayIndex }
 // StringType               = @Ident | @RawString | @Char
 // ArrayIndex               = "[" @Int "]"
@@ -33,7 +36,7 @@ import (
 // ConstFuncOneArgName      = "ABS" | "ACOS"...
 // ConstFuncTwoArgs         = ConstFuncTwoArgsName "(" ConstFuncArgument "," ConstFuncArgument ")"
 // ConstFuncTwoArgsName     = "ATAN2" | "POW"
-// ConstFuncArgument        = Field | Value | ConstFuncExpr
+// ConstFuncArgument        = FieldWithMath | Value | ConstFuncExpr
 // ConstFuncArgumentRHS     = Value
 // PathFuncExpression       = OnePathFuncNoArg
 // OnePathFuncNoArg         = OnePathFuncNoArgName "(" ")"
@@ -418,15 +421,15 @@ func (f *FEBoolean) OutputExpression(asValue bool) (Expression, error) {
 }
 
 type FELhs struct {
-	Func  *FEConstFuncExpression `( @@ |`
-	Bool  *FEBoolean             `@@ |`
-	Field *FEField               `@@ |`
-	Value *FEValue               `@@ )`
+	Func       *FEConstFuncExpression `( @@ |`
+	Bool       *FEBoolean             `@@ |`
+	FieldWMath *FEFieldWithMath       `@@ |`
+	Value      *FEValue               `@@ )`
 }
 
 func (fel *FELhs) String() string {
-	if fel.Field != nil {
-		return fel.Field.String()
+	if fel.FieldWMath != nil {
+		return fel.FieldWMath.String()
 	} else if fel.Value != nil {
 		return fel.Value.String()
 	} else if fel.Func != nil {
@@ -439,8 +442,8 @@ func (fel *FELhs) String() string {
 }
 
 func (f *FELhs) OutputExpression() (Expression, error) {
-	if f.Field != nil {
-		return f.Field.OutputExpression()
+	if f.FieldWMath != nil {
+		return f.FieldWMath.OutputExpression()
 	} else if f.Value != nil {
 		return f.Value.OutputExpression()
 	} else if f.Func != nil {
@@ -454,15 +457,15 @@ func (f *FELhs) OutputExpression() (Expression, error) {
 
 // Normally users do values on the RHS, so prioritize it over field
 type FERhs struct {
-	Func  *FEConstFuncExpression `( @@ |`
-	Bool  *FEBoolean             `@@ |`
-	Value *FEValue               `@@ |`
-	Field *FEField               `@@ )`
+	Func       *FEConstFuncExpression `( @@ |`
+	Bool       *FEBoolean             `@@ |`
+	Value      *FEValue               `@@ |`
+	FieldWMath *FEFieldWithMath       `@@ )`
 }
 
 func (fer *FERhs) String() string {
-	if fer.Field != nil {
-		return fer.Field.String()
+	if fer.FieldWMath != nil {
+		return fer.FieldWMath.String()
 	} else if fer.Value != nil {
 		return fer.Value.String()
 	} else if fer.Func != nil {
@@ -475,8 +478,8 @@ func (fer *FERhs) String() string {
 }
 
 func (f *FERhs) OutputExpression() (Expression, error) {
-	if f.Field != nil {
-		return f.Field.OutputExpression()
+	if f.FieldWMath != nil {
+		return f.FieldWMath.OutputExpression()
 	} else if f.Value != nil {
 		return f.Value.OutputExpression()
 	} else if f.Func != nil {
@@ -488,16 +491,145 @@ func (f *FERhs) OutputExpression() (Expression, error) {
 	}
 }
 
+type FEFieldWithMath struct {
+	Type0     *FEFieldWithMathType0 `@@ |`
+	Type1     *FEFieldWithMathType1 `@@ |`
+	FieldOnly *FEField              `@@`
+}
+
+func (f *FEFieldWithMath) String() string {
+	if f.Type0 != nil {
+		return f.Type0.String()
+	} else if f.Type1 != nil {
+		return f.Type1.String()
+	} else {
+		return "?? (FEFieldWithMath)"
+	}
+}
+
+func (f *FEFieldWithMath) OutputExpression() (Expression, error) {
+	if f.Type0 != nil {
+		return f.Type0.OutputExpression()
+	} else if f.Type1 != nil {
+		return f.Type1.OutputExpression()
+	} else {
+		return nil, fmt.Errorf("Invalid FEFieldWithMath %v", f.String())
+	}
+}
+
+type FEFieldWithMathType0 struct {
+	MathValue *FEMathValue        `( @@ `
+	MathOp    *FEMathArithmeticOp `@@ `
+	Field     *FEField            `@@ )`
+}
+
+func (f *FEFieldWithMathType0) String() string {
+	if f.MathValue != nil && f.MathOp != nil && f.Field != nil {
+		output := []string{}
+		output = append(output, f.MathValue.String())
+		output = append(output, f.MathOp.String())
+		output = append(output, f.Field.String())
+		return strings.Join(output, " ")
+	} else {
+		return "?? (FEFieldWithMathType0)"
+	}
+}
+
+func (f *FEFieldWithMathType0) OutputExpression() (Expression, error) {
+	if f.MathOp != nil && f.MathValue != nil && f.Field != nil {
+		var mathOutExpr FuncExpr
+		mathOpExpr, err := f.MathOp.OutputExpression()
+		if err != nil {
+			return nil, err
+		}
+		mathOutExpr = mathOpExpr.(FuncExpr)
+
+		valueExpr, err := f.MathValue.OutputExpression()
+		if err != nil {
+			return nil, err
+		}
+		mathOutExpr.Params = append(mathOutExpr.Params, valueExpr)
+
+		fieldExpr, err := f.Field.OutputExpression()
+		if err != nil {
+			return nil, err
+		}
+		mathOutExpr.Params = append(mathOutExpr.Params, fieldExpr)
+		return mathOutExpr, nil
+	} else {
+		return nil, fmt.Errorf("Invalid FEFieldWithMathType0 %v", f.String())
+	}
+}
+
+type FEFieldWithMathType1 struct {
+	Field      *FEField            `( @@`
+	MathOp     *FEMathArithmeticOp `{ @@`
+	MathValue  *FEMathValue        `( @@ | `
+	OtherField *FEField            `@@ ) } )`
+}
+
+func (f *FEFieldWithMathType1) String() string {
+	output := []string{}
+	if f.Field != nil {
+		output = append(output, f.Field.String())
+	}
+	if f.MathValue != nil && (f.MathOp != nil || f.OtherField != nil) {
+		output = append(output, f.MathOp.String())
+		if f.MathOp != nil {
+			output = append(output, f.MathValue.String())
+		} else {
+			output = append(output, f.OtherField.String())
+		}
+	}
+	return strings.Join(output, " ")
+}
+
+func (f *FEFieldWithMathType1) OutputExpression() (Expression, error) {
+	if f.Field == nil {
+		return nil, fmt.Errorf("Invalid FEFieldWithMathType1 %v", f.String())
+	}
+
+	if f.MathOp != nil && (f.MathValue != nil || f.OtherField != nil) {
+		var mathOutExpr FuncExpr
+		mathOpExpr, err := f.MathOp.OutputExpression()
+		if err != nil {
+			return nil, err
+		}
+		mathOutExpr = mathOpExpr.(FuncExpr)
+
+		fieldExpr, err := f.Field.OutputExpression()
+		if err != nil {
+			return nil, err
+		}
+		mathOutExpr.Params = append(mathOutExpr.Params, fieldExpr)
+
+		if f.MathValue != nil {
+			valueExpr, err := f.MathValue.OutputExpression()
+			if err != nil {
+				return nil, err
+			}
+			mathOutExpr.Params = append(mathOutExpr.Params, valueExpr)
+		} else {
+			field2Expr, err := f.OtherField.OutputExpression()
+			if err != nil {
+				return nil, err
+			}
+			mathOutExpr.Params = append(mathOutExpr.Params, field2Expr)
+		}
+		return mathOutExpr, nil
+	} else {
+		// No math
+		return f.Field.OutputExpression()
+	}
+}
+
 type FEField struct {
-	MathNeg   *bool               `{ @"-" }`
-	Path      []*FEOnePath        `@@ { "." @@ }`
-	MathOp    *FEMathArithmeticOp `{ ( @@`
-	MathValue *FEMathValue        `@@ ) }`
+	MathNeg *bool        `{ @"-" }`
+	Path    []*FEOnePath `@@ { "." @@ }`
 }
 
 func (fef *FEField) String() string {
 	output := []string{}
-	outerOutput := []string{}
 	for _, onePath := range fef.Path {
 		output = append(output, onePath.String())
 	}
@@ -505,14 +637,7 @@ func (fef *FEField) String() string {
 	if fef.MathNeg != nil {
 		fieldOutput = fmt.Sprintf("%v%v", "-", fieldOutput)
 	}
-	outerOutput = append(outerOutput, fieldOutput)
-	if fef.MathOp != nil {
-		outerOutput = append(outerOutput, fef.MathOp.String())
-	}
-	if fef.MathValue != nil {
-		outerOutput = append(outerOutput, fef.MathValue.String())
-	}
-	return strings.Join(outerOutput, " ")
+	return fieldOutput
 }
 
 func (f *FEField) OutputExpression() (Expression, error) {
@@ -529,42 +654,15 @@ func (f *FEField) OutputExpression() (Expression, error) {
 		}
 	}
 
-	if f.MathNeg != nil || (f.MathOp != nil && f.MathValue != nil) {
+	if f.MathNeg != nil {
 		var mathOutExpr FuncExpr
-		if f.MathOp == nil {
-			// Only thing is a negation of the field value
-			mathOutExpr.FuncName = MathFuncNeg
-			mathOutExpr.Params = append(mathOutExpr.Params, outExpr)
-		} else {
-			// {-}field mathOp mathVal
-			mathOpExpr, err := f.MathOp.OutputExpression()
-			if err != nil {
-				return nil, err
-			}
-			mathOutExpr = mathOpExpr.(FuncExpr)
-
-			if f.MathNeg != nil {
-				negativeFieldExpr := FuncExpr{FuncName: MathFuncNeg}
-				negativeFieldExpr.Params = append(negativeFieldExpr.Params, outExpr)
-				mathOutExpr.Params = append(mathOutExpr.Params, negativeFieldExpr)
-			} else {
-				mathOutExpr.Params = append(mathOutExpr.Params, outExpr)
-			}
-
-			valueExpr, err := f.MathValue.OutputExpression()
-			if err != nil {
-				return nil, err
-			}
-			mathOutExpr.Params = append(mathOutExpr.Params, valueExpr)
-		}
+		// Only thing is a negation of the field value
+		mathOutExpr.FuncName = MathFuncNeg
+		mathOutExpr.Params = append(mathOutExpr.Params, outExpr)
 		return mathOutExpr, nil
 	} else {
 		return outExpr, nil
 	}
-}
-
-func (f *FEField) OutputExpressionSpecialAsValue() (Expression, error) {
-	return ValueExpr{f.Path[0].String()}, nil
 }
 
 type FEStringType struct {
@@ -1078,9 +1176,9 @@ func (n *FEConstFuncNoArgName) String() string {
 
 // Order matters
 type FEConstFuncArgument struct {
-	SubFunc  *FEConstFuncExpression `@@ |`
-	Field    *FEField               `@@ |`
-	Argument *FEValue               `@@`
+	SubFunc    *FEConstFuncExpression `@@ |`
+	FieldWMath *FEFieldWithMath       `@@ |`
+	Argument   *FEValue               `@@`
 }
 
 func (arg *FEConstFuncArgument) String() string {
@@ -1088,8 +1186,8 @@ func (arg *FEConstFuncArgument) String() string {
 		return arg.Argument.String()
 	} else if arg.SubFunc != nil {
 		return arg.SubFunc.String()
-	} else if arg.Field != nil {
-		return arg.Field.String()
+	} else if arg.FieldWMath != nil {
+		return arg.FieldWMath.String()
 	} else {
 		return "?? (FEConstFuncArgument)"
 	}
@@ -1098,8 +1196,8 @@ func (arg *FEConstFuncArgument) String() string {
 func (f *FEConstFuncArgument) OutputExpression() (Expression, error) {
 	if f.Argument != nil {
 		return f.Argument.OutputExpression()
-	} else if f.Field != nil {
-		return f.Field.OutputExpression()
+	} else if f.FieldWMath != nil {
+		return f.FieldWMath.OutputExpression()
 	} else if f.SubFunc != nil {
 		return f.SubFunc.OutputExpression()
 	} else {
