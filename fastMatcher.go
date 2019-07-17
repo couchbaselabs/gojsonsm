@@ -11,6 +11,8 @@ type slotData struct {
 	size  int
 }
 
+var emptySlotData slotData
+
 type FastMatcher struct {
 	def     MatchDef
 	slots   []slotData
@@ -27,7 +29,9 @@ func NewFastMatcher(def *MatchDef) *FastMatcher {
 }
 
 func (m *FastMatcher) Reset() {
-	m.slots = m.slots[:0]
+	for i := 0; i < m.def.NumSlots; i++ {
+		m.slots[i] = emptySlotData
+	}
 	m.buckets.Reset()
 }
 
@@ -98,6 +102,12 @@ func (m *FastMatcher) literalFromSlot(slot SlotID) FastVal {
 	if isLiteralToken(token) {
 		var parser fastLitParser
 		value = parser.Parse(token, tokenData)
+	} else if slotInfo.size > 0 {
+		if token == tknObjectStart {
+			value = NewObjectFastVal(m.tokens.data[slotInfo.start : slotInfo.start+slotInfo.size])
+		} else if token == tknArrayStart {
+			value = NewArrayFastVal(m.tokens.data[slotInfo.start : slotInfo.start+slotInfo.size])
+		}
 	}
 
 	m.tokens.Seek(savePos)
@@ -222,9 +232,13 @@ func (m *FastMatcher) matchOp(op *OpNode, litVal *FastVal) error {
 		return nil
 	}
 
+	var slotNotFound bool
 	lhsVal := NewMissingFastVal()
 	if op.Lhs != nil {
 		lhsVal = m.resolveParam(op.Lhs, litVal)
+		if _, ok := op.Lhs.(SlotRef); ok && lhsVal.IsMissing() {
+			slotNotFound = true
+		}
 	} else if litVal != nil {
 		lhsVal = *litVal
 	}
@@ -232,8 +246,22 @@ func (m *FastMatcher) matchOp(op *OpNode, litVal *FastVal) error {
 	rhsVal := NewMissingFastVal()
 	if op.Rhs != nil {
 		rhsVal = m.resolveParam(op.Rhs, litVal)
+		if _, ok := op.Rhs.(SlotRef); ok && rhsVal.IsMissing() {
+			slotNotFound = true
+		}
 	} else if litVal != nil {
 		rhsVal = *litVal
+	}
+
+	if slotNotFound {
+		// If references are for slots and at least one wasn't found
+		// then the matchOp should not execute
+		m.buckets.MarkNode(bucketIdx, false)
+
+		if m.buckets.IsResolved(0) {
+			return nil
+		}
+		return nil
 	}
 
 	var opRes bool
@@ -548,7 +576,7 @@ func (m *FastMatcher) matchExec(token tokenType, tokenData []byte, tokenDataLen 
 			}
 		}
 	} else if token == tknObjectStart {
-		objStartPos := m.tokens.Position()
+		objStartPos := m.tokens.Position() - 1 /* to include the objStart itself*/
 		if len(node.Elems) == 0 {
 			// If we have no element handlers, we can just skip the whole thing...
 			m.skipValue(token)
@@ -569,6 +597,7 @@ func (m *FastMatcher) matchExec(token tokenType, tokenData []byte, tokenDataLen 
 		objEndPos := m.tokens.Position()
 
 		objFastVal := NewObjectFastVal(m.tokens.data[objStartPos:objEndPos])
+
 		for _, op := range node.Ops {
 			err := m.matchOp(&op, &objFastVal)
 			if err != nil {
@@ -580,7 +609,7 @@ func (m *FastMatcher) matchExec(token tokenType, tokenData []byte, tokenDataLen 
 			}
 		}
 	} else if token == tknArrayStart {
-		arrayStartPos := m.tokens.Position()
+		arrayStartPos := m.tokens.Position() - 1 // Should be -1 to include the [
 		if len(node.Loops) == 0 {
 			err, shouldReturn := m.matchObjectOrArray(token, tokenData, node)
 			if shouldReturn {
@@ -699,6 +728,7 @@ func (m *FastMatcher) matchObjectOrArray(token tokenType, tokenData []byte, node
 		if err != nil {
 			return err, true
 		}
+
 		// Keep this here to catch any empty array or empty objs
 		if token == endToken {
 			return nil, true

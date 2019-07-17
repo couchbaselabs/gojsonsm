@@ -438,6 +438,7 @@ func (val FastVal) compareObjArrData(other FastVal) int {
 	}
 }
 
+// Returns compared val and boolean indicating if the comparison is valid
 func (val FastVal) Compare(other FastVal) int {
 	switch val.dataType {
 	case IntValue:
@@ -480,7 +481,6 @@ func (val FastVal) Compare(other FastVal) int {
 }
 
 func (val FastVal) Equals(other FastVal) bool {
-	// TODO: I doubt this logic is correct...
 	return val.Compare(other) == 0
 }
 
