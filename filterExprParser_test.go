@@ -4,7 +4,10 @@ package gojsonsm
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"io/ioutil"
+	"os"
 	"testing"
 )
 
@@ -876,4 +879,53 @@ func TestFilterExpressionParser(t *testing.T) {
 	_, fe, err = NewFilterExpressionParser("((TRUE OR FALSE () AND TRUE))")
 	_, err = fe.OutputExpression()
 	assert.NotNil(err)
+}
+
+func readJsonHelper(fileName string) (retMap map[string]interface{}, byteSlice []byte, err error) {
+	byteSlice, err = ioutil.ReadFile(fileName)
+	if err != nil {
+		return
+	}
+	var unmarshalledIface interface{}
+	err = json.Unmarshal(byteSlice, &unmarshalledIface)
+	if err != nil {
+		return
+	}
+
+	retMap = unmarshalledIface.(map[string]interface{})
+	return
+}
+
+func TestEdgyJson(t *testing.T) {
+	assert := assert.New(t)
+	dirPath := "testdata/edgyJson"
+	edgyJsonDir, err := os.Open(dirPath)
+	if err != nil {
+		fmt.Printf("Error: Unable to open edgyjson directory\n")
+		return
+	}
+	defer edgyJsonDir.Close()
+
+	var trans Transformer
+	_, fe, err := NewFilterExpressionParser("(int>equals10000) AND (int<>1000000) OR (float IS NOT NULL)")
+	expr, err := fe.OutputExpression()
+	assert.Nil(err)
+	matchDef := trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m := NewFastMatcher(matchDef)
+
+	edgyJsonList, _ := edgyJsonDir.Readdirnames(0)
+	for _, name := range edgyJsonList {
+		fileName := fmt.Sprintf("%s/%s", dirPath, name)
+		byteSlice, err := ioutil.ReadFile(fileName)
+		if err != nil {
+			fmt.Printf("Error: Unable to read %v\n", fileName)
+			continue
+		}
+
+		matched, err := m.Match(byteSlice)
+		assert.Nil(err)
+		assert.False(matched)
+		m.Reset()
+	}
 }
