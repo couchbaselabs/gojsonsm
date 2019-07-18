@@ -24,105 +24,255 @@ func TestFilterExpressionParser(t *testing.T) {
 
 	err = parser.ParseString("TRUE OR FALSE AND NOT FALSE", fe)
 	assert.Nil(err)
-	assert.Equal(2, len(fe.FilterExpr.AndConditions))
-	assert.Equal(1, len(fe.FilterExpr.AndConditions[0].OrConditions))
-	assert.Equal(2, len(fe.FilterExpr.AndConditions[1].OrConditions))
-	assert.NotNil(fe.FilterExpr.AndConditions[1].OrConditions[1].Not)
+	assert.Equal(2, len(fe.FilterExpr.Expr))
+	assert.Equal(2, len(fe.FilterExpr.Expr[1].Expr))
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 
 	fe = &FilterExpression{}
-	err = parser.ParseString("((TRUE OR FALSE))", fe)
+	err = parser.ParseString("(TRUE OR FALSE)", fe)
 	assert.Nil(err)
-	assert.NotNil(fe.OpenParen)
-	assert.NotNil(fe.CloseParen)
-	assert.NotNil(fe.SubFilterExpr.OpenParen)
-	assert.NotNil(fe.SubFilterExpr.CloseParen)
-	assert.Equal(2, len(fe.SubFilterExpr.SubFilterExpr.FilterExpr.AndConditions))
+	assert.Equal(2, len(fe.FilterExpr.Expr[0].Expr[0].SubExpr.Expr))
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("(TRUE AND FALSE OR TRUE) AND FALSE OR TRUE", fe)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("(TRUE AND FALSE)", fe)
 	assert.Nil(err)
-	assert.NotNil(fe.OpenParen)
-	assert.NotNil(fe.CloseParen)
-	assert.Equal(1, len(fe.SubFilterExpr.FilterExpr.AndConditions))
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
+	checkStr := `  True
+AND
+  False`
+	assert.Equal(checkStr, expr.String())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("(TRUE OR FALSE) AND (FALSE OR TRUE)", fe)
 	assert.Nil(err)
-	assert.NotNil(fe.OpenParen)
-	assert.NotNil(fe.CloseParen)
-	assert.NotNil(fe.AndContinuation)
-	assert.NotNil(fe.AndContinuation.OpenParen)
-	assert.NotNil(fe.AndContinuation.CloseParen)
-	assert.Equal(2, len(fe.SubFilterExpr.FilterExpr.AndConditions))
-	assert.Equal(2, len(fe.AndContinuation.SubFilterExpr.FilterExpr.AndConditions))
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
+	checkStr =
+		`    True
+  OR
+    False
+AND
+    False
+  OR
+    True`
+	assert.Equal(checkStr, expr.String())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("(TRUE OR FALSE) AND (FALSE OR TRUE) AND TRUE", fe)
 	assert.Nil(err)
-	assert.Equal(2, len(fe.SubFilterExpr.FilterExpr.AndConditions))
-	assert.NotNil(fe.AndContinuation)
-	assert.Equal(2, len(fe.AndContinuation.SubFilterExpr.FilterExpr.AndConditions))
-	assert.Equal(1, len(fe.AndContinuation.AndContinuation.FilterExpr.AndConditions))
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
+	checkStr = `    True
+  OR
+    False
+AND
+    False
+  OR
+    True
+AND
+  True`
+	assert.Equal(checkStr, expr.String())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("(TRUE AND FALSE) OR (FALSE AND TRUE)", fe)
 	assert.Nil(err)
-	assert.Equal(1, len(fe.SubFilterExpr.FilterExpr.AndConditions))
-	assert.Equal(2, len(fe.SubFilterExpr.FilterExpr.AndConditions[0].OrConditions))
-	assert.Equal(2, len(fe.OrContinuation.SubFilterExpr.FilterExpr.AndConditions[0].OrConditions))
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
+	checkStr = `    True
+  AND
+    False
+OR
+    False
+  AND
+    True`
+	assert.Equal(checkStr, expr.String())
 
 	fe = &FilterExpression{}
-	err = parser.ParseString("((TRUE OR FALSE)) OR (TRUE)", fe)
+	err = parser.ParseString("(TRUE OR FALSE) OR (TRUE)", fe)
 	assert.Nil(err)
-	assert.Equal(2, len(fe.SubFilterExpr.SubFilterExpr.FilterExpr.AndConditions))
-	assert.NotNil(fe.OrContinuation)
-	assert.Equal(1, len(fe.OrContinuation.SubFilterExpr.FilterExpr.AndConditions))
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
+	checkStr = `    True
+  OR
+    False
+OR
+  True`
+	assert.Equal(checkStr, expr.String())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("(TRUE AND FALSE) OR (FALSE)", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
+	checkStr = `    True
+  AND
+    False
+OR
+  False`
+	assert.Equal(checkStr, expr.String())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("TRUE AND (TRUE OR FALSE) AND FALSE", fe)
 	assert.Nil(err)
-	assert.Equal(1, len(fe.FilterExpr.AndConditions))
-	assert.NotNil(fe.FilterExprContinuation)
-	assert.Equal(2, len(fe.FilterExprContinuation.SubFilterExpr.FilterExpr.AndConditions))
-	assert.NotNil(fe.FilterExprContinuation.AndContinuation)
-	assert.Equal(1, len(fe.FilterExprContinuation.AndContinuation.FilterExpr.AndConditions))
+	assert.Equal(1, len(fe.FilterExpr.Expr))
+	assert.Equal(3, len(fe.FilterExpr.Expr[0].Expr))
+	assert.NotNil(fe.FilterExpr.Expr[0].Expr[0].Expr)
+	assert.NotNil(fe.FilterExpr.Expr[0].Expr[1].SubExpr)
+	assert.NotNil(fe.FilterExpr.Expr[0].Expr[2].Expr)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
+	checkStr = `  True
+AND
+    True
+  OR
+    False
+AND
+  False`
+	assert.Equal(checkStr, expr.String())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("(TRUE OR FALSE) AND (FALSE OR TRUE)", fe)
 	assert.Nil(err)
-	assert.Equal(2, len(fe.SubFilterExpr.FilterExpr.AndConditions))
-	assert.NotNil(fe.AndContinuation)
-	assert.Equal(2, len(fe.AndContinuation.SubFilterExpr.FilterExpr.AndConditions))
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
+	checkStr = `    True
+  OR
+    False
+AND
+    False
+  OR
+    True`
+	assert.Equal(checkStr, expr.String())
 
 	fe = &FilterExpression{}
-	err = parser.ParseString("((TRUE OR FALSE) AND (FALSE OR TRUE)) OR (TRUE AND TRUE)", fe)
+	err = parser.ParseString("((TRUE OR FALSE) AND (FALSE OR TRUE)) AND (TRUE OR TRUE)", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
+	checkStr = `      True
+    OR
+      False
+  AND
+      False
+    OR
+      True
+AND
+    True
+  OR
+    True`
+	assert.Equal(checkStr, expr.String())
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("(TRUE) AND (TRUE) OR FALSE AND TRUE", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	checkStr = `    True
+  AND
+    True
+OR
+    False
+  AND
+    True`
+	assert.Equal(checkStr, expr.String())
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE AND (TRUE OR FALSE) OR TRUE", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	checkStr = `    True
+  AND
+      True
+    OR
+      False
+OR
+  True`
+	assert.Equal(checkStr, expr.String())
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE AND (TRUE OR FALSE) AND TRUE OR FALSE", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	checkStr = `    True
+  AND
+      True
+    OR
+      False
+  AND
+    True
+OR
+  False`
+	assert.Equal(checkStr, expr.String())
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE AND (TRUE OR FALSE) AND TRUE OR FALSE OR TRUE OR FALSE AND TRUE", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	checkStr = `    True
+  AND
+      True
+    OR
+      False
+  AND
+    True
+OR
+  False
+OR
+  True
+OR
+    False
+  AND
+    True`
+	assert.Equal(checkStr, expr.String())
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE AND FALSE OR TRUE AND TRUE OR (FALSE AND TRUE)", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	checkStr = `    True
+  AND
+    False
+OR
+    True
+  AND
+    True
+OR
+    False
+  AND
+    True`
+	assert.Equal(checkStr, expr.String())
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE AND FALSE OR TRUE AND TRUE OR (TRUE OR FALSE) AND TRUE", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	checkStr = `    True
+  AND
+    False
+OR
+    True
+  AND
+    True
+OR
+      True
+    OR
+      False
+  AND
+    True`
+	assert.Equal(checkStr, expr.String())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("NOT NOT NOT TRUE", fe)
@@ -133,18 +283,18 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("fieldpath.path >= field2", fe)
 	assert.Nil(err)
-	assert.Equal("fieldpath", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.Equal("path", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
-	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsGreaterThanOrEqualTo())
-	assert.False(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsGreaterThan())
-	assert.Equal("field2", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.FieldWMath.Type1.Field.String())
+	assert.Equal("fieldpath", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.Equal("path", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
+	assert.True(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.Op.IsGreaterThanOrEqualTo())
+	assert.False(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.Op.IsGreaterThan())
+	assert.Equal("field2", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.FieldWMath.Type1.Field.String())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("fieldpath.path IS NOT NULL", fe)
 	assert.Nil(err)
-	assert.Equal("fieldpath", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.Equal("path", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
-	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.CheckOp.IsNotNull())
+	assert.Equal("fieldpath", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.Equal("path", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
+	assert.True(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.CheckOp.IsNotNull())
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -162,14 +312,14 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("fieldpath.path = \"value\"", fe)
 	assert.Nil(err)
-	assert.Equal("fieldpath", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.Equal("path", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
-	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsEqual())
-	assert.Equal("value", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Value.String())
+	assert.Equal("fieldpath", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.Equal("path", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
+	assert.True(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.Op.IsEqual())
+	assert.Equal("value", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Value.String())
 	// Test double equal is the same as single eq
 	err = parser.ParseString("fieldpath.path == \"value\"", fe)
 	assert.Nil(err)
-	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsEqual())
+	//	assert.True(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.Op.IsEqual())
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -187,8 +337,8 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("`onePath.Only` < field2", fe)
 	assert.Nil(err)
-	assert.Equal("onePath.Only", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.Equal("field2", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.FieldWMath.Type1.Field.String())
+	assert.Equal("onePath.Only", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.Equal("field2", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.FieldWMath.Type1.Field.String())
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -273,9 +423,9 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("`onePath.Only` <> \"value\" OR `onePath.Only` <> \"value2\"", fe)
 	assert.Nil(err)
-	assert.Equal("onePath.Only", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsNotEqual())
-	assert.Equal("value", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Value.String())
+	assert.Equal("onePath.Only", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.True(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.Op.IsNotEqual())
+	assert.Equal("value", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Value.String())
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -291,10 +441,10 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("META().`onePath.Only` = \"value\"", fe)
 	assert.Nil(err)
-	assert.Equal("META()", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.Equal("onePath.Only", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
-	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsEqual())
-	assert.Equal("value", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Value.String())
+	assert.Equal("META()", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.Equal("onePath.Only", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
+	assert.True(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.Op.IsEqual())
+	assert.Equal("value", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Value.String())
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -311,9 +461,9 @@ func TestFilterExpressionParser(t *testing.T) {
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("`[$%XDCRInternalMeta*%$]`.metaKey = \"value\"", fe)
-	assert.Equal("metaKey", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
-	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsEqual())
-	assert.Equal("value", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Value.String())
+	assert.Equal("metaKey", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
+	assert.True(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.Op.IsEqual())
+	assert.Equal("value", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Value.String())
 	err = parser.ParseString("EXISTS (`[$%XDCRInternalMeta*%$]`.metaKey) AND `[$%XDCRInternalMeta*%$]`.metaKey = \"value\"", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
@@ -335,14 +485,12 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("`2DarrayPath`[1][-2] = fieldpath2.path2", fe)
 	assert.NotNil(err)
-	//	assert.Equal("2DarrayPath [1] [-2]", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	//	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsEqual())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("`1DarrayPath`[1] = \"arrayVal1\"", fe)
 	assert.Nil(err)
-	assert.Equal("1DarrayPath [1]", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsEqual())
+	assert.Equal("1DarrayPath [1]", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.True(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.Op.IsEqual())
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -361,18 +509,18 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("arrayPath[1].path2.arrayPath3[10].`multiword array`[20] = fieldpath2.path2", fe)
 	assert.Nil(err)
-	assert.Equal("arrayPath [1]", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.Equal("arrayPath", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].StrValue.String())
-	assert.Equal("path2", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].StrValue.String())
-	assert.Equal(0, len(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].ArrayIndexes))
-	assert.Equal("arrayPath3 [10]", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[2].String())
-	assert.Equal("multiword array [20]", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[3].String())
+	assert.Equal("arrayPath [1]", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.Equal("arrayPath", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].StrValue.String())
+	assert.Equal("path2", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].StrValue.String())
+	assert.Equal(0, len(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].ArrayIndexes))
+	assert.Equal("arrayPath3 [10]", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[2].String())
+	assert.Equal("multiword array [20]", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[3].String())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("key < PI() AND -key < 0 AND key > -PI() AND key < ABS(-PI()) AND key > -ABS(-PI())", fe)
 	assert.Nil(err)
-	assert.Equal("key", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.True(*fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncNoArg.ConstFuncNoArgName.Pi)
+	assert.Equal("key", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.True(*fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncNoArg.ConstFuncNoArgName.Pi)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -386,12 +534,12 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("fieldpath.path <= ABS(5)", fe)
 	assert.Nil(err)
-	assert.Equal("fieldpath", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.Equal("path", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
-	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsLessThanOrEqualTo())
-	assert.Equal("ABS", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.ConstFuncOneArgName.String())
-	assert.Equal("5", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.String())
-	assert.Nil(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc)
+	assert.Equal("fieldpath", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.Equal("path", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
+	assert.True(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.Op.IsLessThanOrEqualTo())
+	assert.Equal("ABS", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.ConstFuncOneArgName.String())
+	assert.Equal("5", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.String())
+	assert.Nil(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -409,9 +557,9 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("DATE(fieldpath.path) = DATE(\"2019-01-01\")", fe)
 	assert.Nil(err)
-	assert.Equal("DATE", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.ConstFuncOneArgName.String())
-	assert.Equal("2019-01-01", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.String())
-	assert.Nil(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc)
+	assert.Equal("DATE", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.ConstFuncOneArgName.String())
+	assert.Equal("2019-01-01", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.String())
+	assert.Nil(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -429,9 +577,9 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("DATE(fieldpath.path) > DATE(\"2019-01-01\") AND DATE(fieldpath.path) < DATE('2019-01-01T23:59:59.999Z') AND DATE(fieldpath.path) < DATE('2019-01-01T23:59:59.999-01:00')", fe)
 	assert.Nil(err)
-	assert.Equal("DATE", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.ConstFuncOneArgName.String())
-	assert.Equal("2019-01-01", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.String())
-	assert.Nil(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc)
+	assert.Equal("DATE", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.ConstFuncOneArgName.String())
+	assert.Equal("2019-01-01", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.String())
+	assert.Nil(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -449,22 +597,22 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("fieldpath.path = DATE(`field with spaces`)", fe)
 	assert.Nil(err)
-	assert.Equal("fieldpath", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.Equal("path", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
-	assert.Equal("DATE", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.ConstFuncOneArgName.String())
-	assert.Equal("field with spaces", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.Field.String())
-	assert.Nil(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc)
+	assert.Equal("fieldpath", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.Equal("path", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
+	assert.Equal("DATE", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.ConstFuncOneArgName.String())
+	assert.Equal("field with spaces", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.Field.String())
+	assert.Nil(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc)
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("fieldpath.path >= ABS(CEIL(PI()))", fe)
 	assert.Nil(err)
-	assert.Equal("fieldpath", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.Equal("path", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
-	assert.Equal("ABS", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.ConstFuncOneArgName.String())
-	assert.Nil(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.Argument)
-	assert.NotNil(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc)
-	assert.NotNil(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc.ConstFuncOneArg)
-	assert.NotNil(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc.ConstFuncOneArg.Argument.SubFunc.ConstFuncNoArg)
+	assert.Equal("fieldpath", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.Equal("path", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
+	assert.Equal("ABS", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.ConstFuncOneArgName.String())
+	assert.Nil(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.Argument)
+	assert.NotNil(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc)
+	assert.NotNil(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc.ConstFuncOneArg)
+	assert.NotNil(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncOneArg.Argument.SubFunc.ConstFuncOneArg.Argument.SubFunc.ConstFuncNoArg)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -521,22 +669,22 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("fieldpath.path <> POW(ABS(CEIL(PI())),2)", fe)
 	assert.Nil(err)
-	assert.Equal("fieldpath", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.Equal("path", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
-	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsNotEqual())
-	assert.Equal("POW", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncTwoArgs.ConstFuncTwoArgsName.String())
-	assert.Equal("ABS", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncTwoArgs.Argument0.SubFunc.ConstFuncOneArg.ConstFuncOneArgName.String())
+	assert.Equal("fieldpath", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.Equal("path", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
+	assert.True(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.Op.IsNotEqual())
+	assert.Equal("POW", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncTwoArgs.ConstFuncTwoArgsName.String())
+	assert.Equal("ABS", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncTwoArgs.Argument0.SubFunc.ConstFuncOneArg.ConstFuncOneArgName.String())
 	// Test second not equals
 	err = parser.ParseString("fieldpath.path != POW(ABS(CEIL(PI())),2)", fe)
 	assert.Nil(err)
-	assert.True(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.Op.IsNotEqual())
+	assert.True(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.Op.IsNotEqual())
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("REGEXP_CONTAINS(`[$%XDCRInternalKey*%$]`, \"^xyz*\")", fe)
 	assert.Nil(err)
-	assert.Equal("REGEXP_CONTAINS", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.BooleanExpr.BooleanFunc.BooleanFuncTwoArgs.BooleanFuncTwoArgsName.String())
-	assert.Equal("[$%XDCRInternalKey*%$]", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.BooleanExpr.BooleanFunc.BooleanFuncTwoArgs.Argument0.FieldWMath.Type1.Field.String())
-	assert.Equal("^xyz*", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.BooleanExpr.BooleanFunc.BooleanFuncTwoArgs.Argument1.Argument.String())
+	assert.Equal("REGEXP_CONTAINS", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.BooleanExpr.BooleanFunc.BooleanFuncTwoArgs.BooleanFuncTwoArgsName.String())
+	assert.Equal("[$%XDCRInternalKey*%$]", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.BooleanExpr.BooleanFunc.BooleanFuncTwoArgs.Argument0.FieldWMath.Type1.Field.String())
+	assert.Equal("^xyz*", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.BooleanExpr.BooleanFunc.BooleanFuncTwoArgs.Argument1.Argument.String())
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -570,15 +718,15 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("fieldpath.path = POW(ABS(CEIL(PI())),2) AND REGEXP_CONTAINS(fieldPath2, \"^abc*$\")", fe)
 	assert.Nil(err)
-	assert.Equal("fieldpath", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.Equal("path", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
-	assert.Equal("POW", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncTwoArgs.ConstFuncTwoArgsName.String())
-	assert.Equal("ABS", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.RHS.Func.ConstFuncTwoArgs.Argument0.SubFunc.ConstFuncOneArg.ConstFuncOneArgName.String())
-	assert.Equal(1, len(fe.FilterExpr.AndConditions))
-	assert.Equal(2, len(fe.FilterExpr.AndConditions[0].OrConditions))
-	assert.NotNil(fe.FilterExpr.AndConditions[0].OrConditions[1].Operand.BooleanExpr)
-	assert.Equal("fieldPath2", fe.FilterExpr.AndConditions[0].OrConditions[1].Operand.BooleanExpr.BooleanFunc.BooleanFuncTwoArgs.Argument0.String())
-	assert.Equal("^abc*$", fe.FilterExpr.AndConditions[0].OrConditions[1].Operand.BooleanExpr.BooleanFunc.BooleanFuncTwoArgs.Argument1.Argument.String())
+	assert.Equal("fieldpath", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.Equal("path", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
+	assert.Equal("POW", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncTwoArgs.ConstFuncTwoArgsName.String())
+	assert.Equal("ABS", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.Func.ConstFuncTwoArgs.Argument0.SubFunc.ConstFuncOneArg.ConstFuncOneArgName.String())
+	assert.Equal(1, len(fe.FilterExpr.Expr))
+	assert.Equal(2, len(fe.FilterExpr.Expr[0].Expr))
+	assert.NotNil(fe.FilterExpr.Expr[0].Expr[1].Expr.Operand.BooleanExpr)
+	assert.Equal("fieldPath2", fe.FilterExpr.Expr[0].Expr[1].Expr.Operand.BooleanExpr.BooleanFunc.BooleanFuncTwoArgs.Argument0.String())
+	assert.Equal("^abc*$", fe.FilterExpr.Expr[0].Expr[1].Expr.Operand.BooleanExpr.BooleanFunc.BooleanFuncTwoArgs.Argument1.Argument.String())
 
 	var testStr string = "`field.Path` = \"value\""
 	_, err = GetFilterExpressionMatcher(testStr)
@@ -627,9 +775,9 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("achievements * 10 = 10", fe)
 	assert.Nil(err)
-	assert.Equal("achievements", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
-	assert.NotNil(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.MathOp.Multiply)
-	assert.Equal("10", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type1.MathValue.String())
+	assert.Equal("achievements", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
+	assert.NotNil(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.MathOp.Multiply)
+	assert.Equal("10", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.MathValue.String())
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -683,8 +831,8 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("1 / achievements = 0.25", fe)
 	assert.Nil(err)
-	assert.Equal("1", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type0.MathValue.String())
-	assert.Equal("achievements", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.FieldWMath.Type0.Field.Path[0].String())
+	assert.Equal("1", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type0.MathValue.String())
+	assert.Equal("achievements", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type0.Field.Path[0].String())
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -741,11 +889,11 @@ func TestFilterExpressionParser(t *testing.T) {
 	fe = &FilterExpression{}
 	err = parser.ParseString("ABS(-achievements[2]*10) > 0", fe)
 	assert.Nil(err)
-	assert.NotNil(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.Field.MathNeg)
-	assert.Equal("achievements", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.Field.Path[0].StrValue.String())
-	assert.Equal("[2]", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.Field.Path[0].ArrayIndexes[0].String())
-	assert.NotNil(fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.MathOp.Multiply)
-	assert.Equal("10", fe.FilterExpr.AndConditions[0].OrConditions[0].Operand.LHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.MathValue.String())
+	assert.NotNil(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.Field.MathNeg)
+	assert.Equal("achievements", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.Field.Path[0].StrValue.String())
+	assert.Equal("[2]", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.Field.Path[0].ArrayIndexes[0].String())
+	assert.NotNil(fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.MathOp.Multiply)
+	assert.Equal("10", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.Func.ConstFuncOneArg.Argument.FieldWMath.Type1.MathValue.String())
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
@@ -824,6 +972,26 @@ func TestFilterExpressionParser(t *testing.T) {
 	assert.False(match)
 	assert.Nil(err)
 
+	// Test the FEInnerExpression's orcontinuation would not infinitely recurse
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE AND FALSE OR TRUE AND TRUE OR (abcd 0)", fe)
+	assert.NotNil(err)
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE AND FALSE OR TRUE AND TRUE OR (TRUE AND REGEXP_CONTAINS(abcd)) AND POW(0,2)", fe)
+	assert.NotNil(err)
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE OR FALSE OR (TRUE REGEXP_CONTAINS(abcd)) OR `2345`", fe)
+	assert.NotNil(err)
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE OR FALSE OR (`123abc`) OR `2345`", fe)
+	assert.NotNil(err)
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE OR FALSE OR `123abc`", fe)
+	assert.NotNil(err)
+	fe = &FilterExpression{}
+	err = parser.ParseString("TRUE OR FALSE OR (TRUE AND abc 012)", fe)
+	assert.NotNil(err)
+
 	fe = &FilterExpression{}
 	err = parser.ParseString("achievement * 2 +1", fe)
 	assert.NotNil(err)
@@ -874,11 +1042,6 @@ func TestFilterExpressionParser(t *testing.T) {
 	udMarsh, _ = json.Marshal(userData)
 	match, err = m.Match(udMarsh)
 	assert.True(match)
-
-	// Invalid parenthesis - this is caught by the parenthesis check
-	_, fe, err = NewFilterExpressionParser("((TRUE OR FALSE () AND TRUE))")
-	_, err = fe.OutputExpression()
-	assert.NotNil(err)
 }
 
 func readJsonHelper(fileName string) (retMap map[string]interface{}, byteSlice []byte, err error) {
@@ -907,7 +1070,7 @@ func TestEdgyJson(t *testing.T) {
 	defer edgyJsonDir.Close()
 
 	var trans Transformer
-	_, fe, err := NewFilterExpressionParser("(int>equals10000) AND (int<>1000000) OR (float IS NOT NULL)")
+	parser, fe, err := NewFilterExpressionParser("(int>equals10000) AND (int<>1000000) OR (float IS NOT NULL)")
 	expr, err := fe.OutputExpression()
 	assert.Nil(err)
 	matchDef := trans.Transform([]Expression{expr})
@@ -925,7 +1088,31 @@ func TestEdgyJson(t *testing.T) {
 
 		matched, err := m.Match(byteSlice)
 		assert.Nil(err)
-		assert.False(matched)
+		assert.True(matched)
+		m.Reset()
+	}
+
+	err = parser.ParseString("(int>=10000) AND (int<>1000000) OR (float IS NOT NULL) AND int>0", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	m = NewFastMatcher(matchDef)
+
+	for _, name := range edgyJsonList {
+		fileName := fmt.Sprintf("%s/%s", dirPath, name)
+		byteSlice, err := ioutil.ReadFile(fileName)
+		if err != nil {
+			fmt.Printf("Error: Unable to read %v\n", fileName)
+			continue
+		}
+
+		matched, err := m.Match(byteSlice)
+		assert.Nil(err)
+		if !matched {
+			fmt.Printf("%v did not match when it should have\n", fileName)
+		}
+		assert.True(matched)
 		m.Reset()
 	}
 }

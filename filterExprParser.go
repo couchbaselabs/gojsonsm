@@ -11,9 +11,10 @@ import (
 
 // EBNF Grammar describing the parser
 
-// FilterExpression         = ( "(" FilterExpression ")" { "AND" FilterExpression } { "OR" FilterExpression } ) | InnerExpression { "AND" FilterExpression }
-// InnerExpression          =  AndCondition { "OR" AndCondition }
-// AndCondition             =  Condition { "AND" Condition }
+// FilterExpression         = InnerExpression
+// InnerExpression          = InnerAndExpression { "OR" InnerAndExpression }
+// InnerAndExpression       = SubExprOrTerm { "AND" SubExprOrTerm }
+// SubExprOrTerm            = "(" InnerExpression ")" | Condition
 // Condition                = ( [ "NOT" ] Condition ) | Operand
 // Operand                  = BooleanExpr | ( LHS ( CheckOp | ( CompareOp RHS) ) )
 // BooleanExpr              = Boolean | BooleanFuncExpr
@@ -49,189 +50,137 @@ import (
 // ExistsClause              = ( "EXISTS" "(" Field ")" )
 
 type FilterExpression struct {
-	OpenParen              *FEOpenParen       `( @@ `
-	SubFilterExpr          *FilterExpression  `@@`
-	CloseParen             *FECloseParen      ` @@`
-	AndContinuation        *FilterExpression  `{ "AND" @@ }`
-	OrContinuation         *FilterExpression  `{ "OR" @@ }) |`
-	FilterExpr             *FEInnerExpression `@@`
-	FilterExprContinuation *FilterExpression  `{ "AND" @@ }`
+	FilterExpr *FEInnerExpression `@@`
 }
 
 func (f *FilterExpression) String() string {
-	var output []string
 	if f.FilterExpr != nil {
-		output = append(output, f.FilterExpr.String())
-		if f.FilterExprContinuation != nil {
-			output = append(output, OperatorAnd)
-			output = append(output, f.FilterExprContinuation.String())
-		}
+		return f.FilterExpr.String()
 	} else {
-		if f.OpenParen != nil {
-			output = append(output, f.OpenParen.String())
-		}
-		if f.SubFilterExpr != nil {
-			output = append(output, f.SubFilterExpr.String())
-		}
-		if f.CloseParen != nil {
-			output = append(output, f.CloseParen.String())
-		}
-		if f.AndContinuation != nil {
-			output = append(output, OperatorAnd)
-			output = append(output, f.AndContinuation.String())
-		} else if f.OrContinuation != nil {
-			output = append(output, OperatorOr)
-			output = append(output, f.OrContinuation.String())
-		}
-
-	}
-	if len(output) == 0 {
-		return "?? (FilterExpression)"
-	} else {
-		return strings.Join(output, " ")
-	}
-
-}
-
-func (f *FilterExpression) outputExpressionNoParenCheck() (Expression, error) {
-	if f.FilterExpr != nil {
-		if f.FilterExprContinuation != nil {
-			continuation, err := f.FilterExprContinuation.OutputExpression()
-			if err != nil {
-				return nil, err
-			}
-			filterExpr, err := f.FilterExpr.OutputExpression()
-			if err != nil {
-				return nil, err
-			}
-			var outExpr AndExpr
-			outExpr = append(outExpr, filterExpr)
-			outExpr = append(outExpr, continuation)
-			return outExpr, nil
-		} else {
-			return f.FilterExpr.OutputExpression()
-		}
-	} else if f.SubFilterExpr != nil {
-		subExprOut, err := f.SubFilterExpr.OutputExpression()
-		if err != nil {
-			return nil, err
-		}
-		if f.AndContinuation != nil {
-			var outExpr AndExpr
-			outExpr = append(outExpr, subExprOut)
-			andContinuation, err := f.AndContinuation.OutputExpression()
-			if err != nil {
-				return nil, err
-			}
-			outExpr = append(outExpr, andContinuation)
-			return outExpr, nil
-		} else if f.OrContinuation != nil {
-			var outExpr OrExpr
-			outExpr = append(outExpr, subExprOut)
-			orContinuation, err := f.OrContinuation.OutputExpression()
-			if err != nil {
-				return nil, err
-			}
-			outExpr = append(outExpr, orContinuation)
-			return outExpr, nil
-		} else {
-			return subExprOut, err
-		}
-	} else {
-		return nil, fmt.Errorf("Invalid FilterExpression %v", f.String())
+		return "Invalid FilterExpression"
 	}
 }
 
 func (f *FilterExpression) OutputExpression() (Expression, error) {
-	openParens := f.GetTotalOpenParens()
-	closeParens := f.GetTotalCloseParens()
-	if openParens != closeParens {
-		return nil, fmt.Errorf("%s: found %v open parentheses and %v close parentheses", ErrorMalformedParenthesis, openParens, closeParens)
+	if f.FilterExpr != nil {
+		return f.FilterExpr.OutputExpression()
+	} else {
+		return nil, fmt.Errorf("Invalid FilterExpression")
 	}
-
-	return f.outputExpressionNoParenCheck()
-}
-
-func (f *FilterExpression) GetTotalOpenParens() (count int) {
-	if f.OpenParen != nil {
-		count++
-	}
-	if f.SubFilterExpr != nil {
-		count += f.SubFilterExpr.GetTotalOpenParens()
-	} else if f.FilterExpr != nil {
-		if f.FilterExprContinuation != nil {
-			count += f.FilterExprContinuation.GetTotalOpenParens()
-		}
-	}
-	return
-}
-
-func (f *FilterExpression) GetTotalCloseParens() (count int) {
-	if f.CloseParen != nil {
-		count++
-	}
-	if f.SubFilterExpr != nil {
-		count += f.SubFilterExpr.GetTotalCloseParens()
-	} else if f.FilterExpr != nil {
-		if f.FilterExprContinuation != nil {
-			count += f.FilterExprContinuation.GetTotalCloseParens()
-		}
-	}
-	return
 }
 
 type FEInnerExpression struct {
-	AndConditions []*FEAndCondition `( @@ { "OR" @@ } )`
+	Expr []*FEInnerAndExpression `@@ { "OR" @@ }`
 }
 
-func (fe *FEInnerExpression) String() string {
-	output := []string{}
-
-	first := true
-	for _, expr := range fe.AndConditions {
-		if first {
-			first = false
-		} else {
-			output = append(output, OperatorOr)
-		}
+func (f *FEInnerExpression) String() string {
+	var output []string
+	if f.Expr == nil {
+		return ""
+	}
+	for _, expr := range f.Expr {
 		output = append(output, expr.String())
 	}
-
-	return strings.Join(output, " ")
+	return strings.Join(output, " OR ")
 }
 
 func (f *FEInnerExpression) OutputExpression() (Expression, error) {
 	var outExpr OrExpr
-
-	for _, oneExpr := range f.AndConditions {
-		andExpr, err := oneExpr.OutputExpression()
+	if f.Expr == nil {
+		return nil, fmt.Errorf("Invalid FEInnerExpression")
+	}
+	for _, exprWrapper := range f.Expr {
+		expr, err := exprWrapper.OutputExpression()
 		if err != nil {
 			return nil, err
 		}
-		outExpr = append(outExpr, andExpr)
+		outExpr = append(outExpr, expr)
 	}
-
 	return outExpr, nil
 }
 
-type FEOpenParen struct {
-	Parens string `@"("`
+type FEInnerAndExpression struct {
+	Expr []*FESubExprOrTerm `@@ { "AND" @@ }`
 }
 
-func (feop *FEOpenParen) String() string {
-	return "("
+func (f *FEInnerAndExpression) String() string {
+	var output []string
+	if f.Expr == nil {
+		return ""
+	}
+	for _, expr := range f.Expr {
+		output = append(output, expr.String())
+	}
+	return strings.Join(output, " AND ")
 }
 
-type FECloseParen struct {
-	Parens string `@")"`
+func (f *FEInnerAndExpression) OutputExpression() (Expression, error) {
+	var outExpr AndExpr
+	if f.Expr == nil {
+		return nil, fmt.Errorf("Invalid FEInnerAndExpression")
+	}
+	for _, exprWrapper := range f.Expr {
+		expr, err := exprWrapper.OutputExpression()
+		if err != nil {
+			return nil, err
+		}
+		outExpr = append(outExpr, expr)
+	}
+	return outExpr, nil
 }
 
-func (fecp *FECloseParen) String() string {
-	return ")"
+type FESubExprOrTerm struct {
+	SubExpr *FEInnerExpression `( "(" @@ ")" |`
+	Expr    *FECondition       `@@ )`
+}
+
+func (f *FESubExprOrTerm) String() string {
+	if f.SubExpr != nil {
+		return fmt.Sprintf("%v %v %v", "(", f.SubExpr.String(), ")")
+	} else if f.Expr != nil {
+		return f.Expr.String()
+	} else {
+		return "?? (FESubExprOrTerm)"
+	}
+}
+
+func (f *FESubExprOrTerm) OutputExpression() (Expression, error) {
+	if f.SubExpr != nil {
+		return f.SubExpr.OutputExpression()
+	} else if f.Expr != nil {
+		return f.Expr.OutputExpression()
+	} else {
+		return nil, fmt.Errorf("Invalid FESubExprOrTerm")
+	}
+}
+
+type FEAndConditionWrapper struct {
+	SubExpr *FEAndCondition `(  "(" @@ ")"  |`
+	Expr    *FEAndCondition `@@ )`
+}
+
+func (f *FEAndConditionWrapper) String() string {
+	if f.SubExpr != nil {
+		return fmt.Sprintf("%v %v %v", "(", f.SubExpr.String(), ")")
+	} else if f.Expr != nil {
+		return f.Expr.String()
+	} else {
+		return "?? (FEAndConditionWrapper)"
+	}
+}
+
+func (f *FEAndConditionWrapper) OutputExpression() (Expression, error) {
+	if f.SubExpr != nil {
+		return f.SubExpr.OutputExpression()
+	} else if f.Expr != nil {
+		return f.Expr.OutputExpression()
+	} else {
+		return nil, fmt.Errorf("Invalid FEAndConditionWrapper")
+	}
 }
 
 type FEAndCondition struct {
-	OrConditions []*FECondition `@@ { "AND" @@ }`
+	OrConditions []*FESubExprOrTerm `@@ { "AND" @@ }`
 }
 
 func (ac *FEAndCondition) String() string {
