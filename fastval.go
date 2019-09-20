@@ -349,6 +349,20 @@ func (val FastVal) compareFloat(other FastVal) int {
 	floatVal := val.AsFloat()
 	floatOval := other.AsFloat()
 
+	if math.IsNaN(floatVal) || math.IsNaN(floatOval) {
+		// Comparing Not-A-Number
+		// Documentation wise - they should be aware that NaN ops are undefined
+		// In the meantime - because we have to return something, just let imaginary numbers be < real numbers
+		if math.IsNaN(floatVal) && math.IsNaN(floatOval) {
+			// In go, two NaN's are not the same - thus this should never return 0, so return -1 by default
+			return -1
+		} else if math.IsNaN(floatVal) && !math.IsNaN(floatOval) {
+			return -1
+		} else if !math.IsNaN(floatVal) && math.IsNaN(floatOval) {
+			return 1
+		}
+	}
+
 	// Perform epsilon comparison first
 	if math.Abs(floatVal-floatOval) < EPSILON {
 		return 0

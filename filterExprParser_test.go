@@ -841,6 +841,8 @@ OR
 	userData = map[string]interface{}{
 		"achievements":  4,
 		"achievements2": 2,
+		"int":           93,
+		"int2":          0,
 	}
 	udMarsh, _ = json.Marshal(userData)
 	match, err = m.Match(udMarsh)
@@ -853,6 +855,7 @@ OR
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
 	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
 	match, err = m.Match(udMarsh)
 	assert.True(match)
 
@@ -863,6 +866,7 @@ OR
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
 	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
 	match, err = m.Match(udMarsh)
 	assert.True(match)
 
@@ -873,6 +877,7 @@ OR
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
 	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
 	match, err = m.Match(udMarsh)
 	assert.True(match)
 
@@ -882,6 +887,51 @@ OR
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("ASIN(int)<>3.05682983181e+307 AND ASIN(int) != ASIN(int) AND NOT ASIN(int) > ASIN(int) AND NOT ASIN(int) <= ASIN(int)", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	m = NewFastMatcher(matchDef)
+	assert.NotNil(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("ATAN(int)<>3.05682983181e+307", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	m = NewFastMatcher(matchDef)
+	assert.NotNil(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("ASIN(int2)<>3.05682983181e+307", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	m = NewFastMatcher(matchDef)
+	assert.NotNil(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("ATAN(int2)<>3.05682983181e+307", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	m = NewFastMatcher(matchDef)
 	assert.NotNil(matchDef)
 	match, err = m.Match(udMarsh)
 	assert.True(match)
@@ -902,6 +952,7 @@ OR
 		"achievements": [6]int{49, 58, 108, 141, 177, 229},
 	}
 	udMarsh, _ = json.Marshal(userData)
+	m = NewFastMatcher(matchDef)
 	match, err = m.Match(udMarsh)
 	assert.True(match)
 
@@ -929,6 +980,7 @@ OR
 	assert.NotNil(matchDef)
 	udMarsh, _ = json.Marshal(beer)
 	match, err = m.Match(udMarsh)
+	m = NewFastMatcher(matchDef)
 	assert.True(match)
 
 	fe = &FilterExpression{}
@@ -944,6 +996,7 @@ OR
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
 	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
 	match, err = m.Match(marshalledData)
 	assert.True(match)
 
