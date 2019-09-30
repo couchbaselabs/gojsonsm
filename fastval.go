@@ -39,6 +39,13 @@ const (
 	TimeValue
 )
 
+// When users try to match a string to a bool, the bool is converted to a JSON string
+// These are constants
+var TrueValueBytes = []byte("true")
+var FalseValueBytes = []byte("false")
+
+var toJsonStringBuffer []byte
+
 type FastVal struct {
 	dataType  ValueType
 	data      interface{}
@@ -166,107 +173,147 @@ func (val FastVal) GetTime() *time.Time {
 	return val.data.(*time.Time)
 }
 
-func (val FastVal) AsInt() int64 {
+func (val FastVal) AsInt() (int64, bool) {
 	switch val.dataType {
 	case IntValue:
-		return val.GetInt()
+		return val.GetInt(), true
 	case UintValue:
-		return int64(val.GetUint())
+		return int64(val.GetUint()), true
 	case FloatValue:
-		return int64(val.GetFloat())
+		return int64(val.GetFloat()), true
+	case JsonStringValue:
+		fallthrough
 	case JsonIntValue:
-		parsedVal, _ := strconv.ParseInt(string(val.sliceData), 10, 64)
-		return parsedVal
+		parsedVal, err := strconv.ParseInt(string(val.sliceData), 10, 64)
+		return parsedVal, err == nil
 	case JsonUintValue:
-		parsedVal, _ := strconv.ParseUint(string(val.sliceData), 10, 64)
-		return int64(parsedVal)
+		parsedVal, err := strconv.ParseUint(string(val.sliceData), 10, 64)
+		return int64(parsedVal), err == nil
 	case JsonFloatValue:
-		parsedVal, _ := strconv.ParseFloat(string(val.sliceData), 64)
-		return int64(parsedVal)
+		parsedVal, err := strconv.ParseFloat(string(val.sliceData), 64)
+		return int64(parsedVal), err == nil
 	case TrueValue:
-		return 1
+		return 1, true
 	case FalseValue:
-		return 0
+		return 0, true
 	case NullValue:
-		return math.MinInt64
+		return 0, false
 	}
-	return 0
+	return 0, false
 }
 
-func (val FastVal) AsUint() uint64 {
+func (val FastVal) AsUint() (uint64, bool) {
 	switch val.dataType {
 	case IntValue:
-		return uint64(val.GetInt())
+		return uint64(val.GetInt()), true
 	case UintValue:
-		return val.GetUint()
+		return val.GetUint(), true
 	case FloatValue:
-		return uint64(val.GetFloat())
+		return uint64(val.GetFloat()), true
 	case JsonIntValue:
-		parsedVal, _ := strconv.ParseInt(string(val.sliceData), 10, 64)
-		return uint64(parsedVal)
+		parsedVal, err := strconv.ParseInt(string(val.sliceData), 10, 64)
+		return uint64(parsedVal), err == nil
+	case JsonStringValue:
+		fallthrough
 	case JsonUintValue:
-		parsedVal, _ := strconv.ParseUint(string(val.sliceData), 10, 64)
-		return parsedVal
+		parsedVal, err := strconv.ParseUint(string(val.sliceData), 10, 64)
+		return parsedVal, err == nil
 	case JsonFloatValue:
-		parsedVal, _ := strconv.ParseFloat(string(val.sliceData), 64)
-		return uint64(parsedVal)
+		parsedVal, err := strconv.ParseFloat(string(val.sliceData), 64)
+		return uint64(parsedVal), err == nil
 	case TrueValue:
-		return 1
+		return 1, true
 	case FalseValue:
-		return 0
+		return 0, true
 	case NullValue:
-		return math.MaxUint64
+		return uint64(0), false
 	}
-	return 0
+	return 0, false
 }
 
-func (val FastVal) AsFloat() float64 {
+func (val FastVal) AsFloat() (float64, bool) {
 	switch val.dataType {
 	case IntValue:
-		return float64(val.GetInt())
+		return float64(val.GetInt()), true
 	case UintValue:
-		return float64(val.GetUint())
+		return float64(val.GetUint()), true
 	case FloatValue:
-		return val.GetFloat()
+		return val.GetFloat(), true
 	case JsonIntValue:
-		parsedVal, _ := strconv.ParseInt(string(val.sliceData), 10, 64)
-		return float64(parsedVal)
+		parsedVal, err := strconv.ParseInt(string(val.sliceData), 10, 64)
+		return float64(parsedVal), err == nil
 	case JsonUintValue:
-		parsedVal, _ := strconv.ParseUint(string(val.sliceData), 10, 64)
-		return float64(parsedVal)
+		parsedVal, err := strconv.ParseUint(string(val.sliceData), 10, 64)
+		return float64(parsedVal), err == nil
+	case JsonStringValue:
+		fallthrough
 	case JsonFloatValue:
-		parsedVal, _ := strconv.ParseFloat(string(val.sliceData), 64)
-		return parsedVal
+		parsedVal, err := strconv.ParseFloat(string(val.sliceData), 64)
+		return parsedVal, err == nil
 	case TrueValue:
-		return 1.0
+		return 1.0, true
 	case FalseValue:
-		return 0.0
+		return 0.0, true
 	case NullValue:
-		return math.MaxFloat64
+		return 0.0, false
 	}
-	return 0.0
+	return 0.0, false
 }
 
-func (val FastVal) AsBoolean() bool {
-	return val.AsInt() != 0 && val.AsInt() != math.MinInt64
+var JsonStringTrueRegexp *regexp.Regexp = regexp.MustCompile("^[T|t][R|r][U|u][E|e]$")
+var JsonStringFalseRegexp *regexp.Regexp = regexp.MustCompile("^[F|f][A|a][L|l][S|s][E|e]$")
+
+func (val FastVal) AsBoolean() (bool, bool) {
+	switch val.dataType {
+	case JsonStringValue:
+		if JsonStringTrueRegexp.Match(val.sliceData) {
+			return true, true
+		} else if JsonStringFalseRegexp.Match(val.sliceData) {
+			return false, true
+		} else {
+			return false, false
+		}
+	case IntValue:
+		return val.GetInt() != 0, true
+	case UintValue:
+		return val.GetUint() != 0, true
+	case FloatValue:
+		return val.GetFloat() != 0.0, true
+	case JsonIntValue:
+		parsedVal, err := strconv.ParseInt(string(val.sliceData), 10, 64)
+		return parsedVal != 0, err == nil
+	case JsonUintValue:
+		parsedVal, err := strconv.ParseUint(string(val.sliceData), 10, 64)
+		return parsedVal != 0, err == nil
+	case JsonFloatValue:
+		parsedVal, err := strconv.ParseFloat(string(val.sliceData), 64)
+		return parsedVal != 0.0, err == nil
+	case TrueValue:
+		return true, true
+	case FalseValue:
+		return false, true
+	default:
+		// Undefined
+		return true, false
+	}
 }
 
-func (val FastVal) AsRegex() FastValRegexIface {
+func (val FastVal) AsRegex() (FastValRegexIface, bool) {
 	switch val.dataType {
 	case RegexValue:
-		return val.data.(*regexp.Regexp)
+		return val.data.(*regexp.Regexp), true
 	case PcreValue:
-		return val.data.(PcreWrapperInterface)
+		return val.data.(PcreWrapperInterface), true
 	}
-	return nil
+	return nil, false
 }
 
-func (val FastVal) AsTime() *time.Time {
+func (val FastVal) AsTime() (*time.Time, bool) {
 	switch val.dataType {
 	case TimeValue:
-		return val.data.(*time.Time)
+		return val.data.(*time.Time), true
 	}
-	return nil
+	return nil, false
 }
 
 func (val FastVal) ToBinString() (FastVal, error) {
@@ -283,7 +330,34 @@ func (val FastVal) ToBinString() (FastVal, error) {
 	return val, errors.New("invalid type coercion")
 }
 
+// The following reuse an internal buffer so this should be hidden from outside callers
+// Internally, this must be called only once per comparison, and should be used for implicit comversion
+// (i.e. no double implicit conversion to string from the following 3 types)
+func (val FastVal) toJsonStringInternal() (FastVal, error) {
+	val, err := val.ToJsonString()
+
+	if err != nil {
+		switch val.dataType {
+		case UintValue:
+			toJsonStringBuffer = toJsonStringBuffer[:0]
+			toJsonStringBuffer = strconv.AppendUint(toJsonStringBuffer, val.GetUint(), 10)
+			return NewJsonStringFastVal(toJsonStringBuffer), nil
+		case IntValue:
+			toJsonStringBuffer = toJsonStringBuffer[:0]
+			toJsonStringBuffer = strconv.AppendInt(toJsonStringBuffer, val.GetInt(), 10)
+			return NewJsonStringFastVal(toJsonStringBuffer), nil
+		case FloatValue:
+			toJsonStringBuffer = toJsonStringBuffer[:0]
+			toJsonStringBuffer = strconv.AppendFloat(toJsonStringBuffer, val.GetFloat(), 'E', -1, 64)
+			return NewJsonStringFastVal(toJsonStringBuffer), nil
+		}
+	}
+
+	return val, err
+}
+
 func (val FastVal) ToJsonString() (FastVal, error) {
+	invalidErr := errors.New("invalid type coercion")
 	switch val.dataType {
 	case StringValue:
 		// TODO: Improve AsJsonString allocations
@@ -295,9 +369,14 @@ func (val FastVal) ToJsonString() (FastVal, error) {
 		return NewJsonStringFastVal(quotedBytes[1 : len(quotedBytes)-1]), nil
 	case JsonStringValue:
 		return val, nil
+	case TrueValue:
+		return NewJsonStringFastVal(TrueValueBytes), nil
+	case FalseValue:
+		return NewJsonStringFastVal(FalseValueBytes), nil
+	case NullValue:
+		return NewInvalidFastVal(), invalidErr
 	}
-
-	return val, errors.New("invalid type coercion")
+	return val, invalidErr
 }
 
 func (val FastVal) floatToIntOverflows() bool {
@@ -312,42 +391,56 @@ func (val FastVal) floatToIntOverflows() bool {
 	}
 }
 
-func (val FastVal) compareInt(other FastVal) int {
+func (val FastVal) compareNull(other FastVal) (int, bool) {
+	if val.IsNull() && other.IsNull() {
+		return 0, true
+	} else if val.IsNull() && !other.IsNull() {
+		return -1, true
+	} else if !val.IsNull() && other.IsNull() {
+		return 1, true
+	} else {
+		// Shouldn't be possible
+		return 0, false
+	}
+}
+
+func (val FastVal) compareInt(other FastVal) (int, bool) {
 	if other.dataType == FloatValue && other.floatToIntOverflows() {
 		return val.compareFloat(other)
 	}
 
-	intVal := val.AsInt()
-	intOval := other.AsInt()
+	intVal, valid := val.AsInt()
+	intOval, valid2 := other.AsInt()
 
 	if intVal < intOval {
-		return -1
+		return -1, valid && valid2
 	} else if intVal > intOval {
-		return 1
+		return 1, valid && valid2
 	} else {
-		return 0
+		return 0, valid && valid2
 	}
 }
 
-func (val FastVal) compareUint(other FastVal) int {
-	uintVal := val.AsUint()
-	uintOval := other.AsUint()
+func (val FastVal) compareUint(other FastVal) (int, bool) {
+	uintVal, valid := val.AsUint()
+	uintOval, valid2 := other.AsUint()
+
 	if uintVal < uintOval {
-		return -1
+		return -1, valid && valid2
 	} else if uintVal > uintOval {
-		return 1
+		return 1, valid && valid2
 	} else {
-		return 0
+		return 0, valid && valid2
 	}
 }
 
-func (val FastVal) compareFloat(other FastVal) int {
+func (val FastVal) compareFloat(other FastVal) (int, bool) {
 	// TODO(brett19): EPISLON probably should be defined better than this
 	// possibly even 0 if we want to force exact matching for floats...
 	EPSILON := 0.0000001
 
-	floatVal := val.AsFloat()
-	floatOval := other.AsFloat()
+	floatVal, valid := val.AsFloat()
+	floatOval, valid2 := other.AsFloat()
 
 	if math.IsNaN(floatVal) || math.IsNaN(floatOval) {
 		// Comparing Not-A-Number
@@ -355,75 +448,82 @@ func (val FastVal) compareFloat(other FastVal) int {
 		// In the meantime - because we have to return something, just let imaginary numbers be < real numbers
 		if math.IsNaN(floatVal) && math.IsNaN(floatOval) {
 			// In go, two NaN's are not the same - thus this should never return 0, so return -1 by default
-			return -1
+			return 0, false
 		} else if math.IsNaN(floatVal) && !math.IsNaN(floatOval) {
-			return -1
+			return -1, false
 		} else if !math.IsNaN(floatVal) && math.IsNaN(floatOval) {
-			return 1
+			return 1, false
 		}
 	}
 
 	// Perform epsilon comparison first
 	if math.Abs(floatVal-floatOval) < EPSILON {
-		return 0
+		return 0, valid && valid2
 	}
 
 	// Traditional comparison
 	if floatVal < floatOval {
-		return -1
+		return -1, valid && valid2
 	} else if floatVal > floatOval {
-		return 1
+		return 1, valid && valid2
 	} else {
-		return 0
+		return 0, valid && valid2
 	}
 }
 
-func (val FastVal) compareBoolean(other FastVal) int {
-	// We cheat here and use int comparison mode, since integer conversions
-	// of the boolean datatypes are consistent
-	return val.compareInt(other)
+func (val FastVal) compareBoolean(other FastVal) (int, bool) {
+	valBool, valid := val.AsBoolean()
+	otherBool, valid2 := other.AsBoolean()
+	if !valid || !valid2 {
+		return 0, false
+	}
+
+	if valBool == otherBool {
+		return 0, true
+	} else if valBool && !otherBool {
+		return 1, true
+	} else {
+		return -1, true
+	}
 }
 
-func (val FastVal) compareStrings(other FastVal) int {
+func (val FastVal) compareStrings(other FastVal) (int, bool) {
 	// TODO: Improve string comparisons to avoid casting or converting
-	escVal, _ := val.ToJsonString()
-	escOval, _ := other.ToJsonString()
-	return strings.Compare(string(escVal.sliceData), string(escOval.sliceData))
+	escVal, err := val.toJsonStringInternal()
+	escOval, err1 := other.toJsonStringInternal()
+
+	result := strings.Compare(string(escVal.sliceData), string(escOval.sliceData))
+	return result, err == nil && err1 == nil
 }
 
-func (val FastVal) compareTime(other FastVal) int {
-	thisTime := val.AsTime()
-	otherTime := other.AsTime()
+func (val FastVal) compareTime(other FastVal) (int, bool) {
+	thisTime, valid := val.AsTime()
+	otherTime, valid2 := other.AsTime()
 
-	// Consider nil value as the smaller/earlier than non-nil values
-	if thisTime == nil && otherTime == nil {
-		return 0
-	} else if otherTime == nil && thisTime != nil {
-		return 1
-	} else if otherTime != nil && thisTime == nil {
-		return -1
+	if thisTime == nil || otherTime == nil {
+		return 0, false
 	}
 
 	if thisTime.Equal(*otherTime) {
-		return 0
+		return 0, valid && valid2
 	} else if thisTime.After(*otherTime) {
-		return 1
+		return 1, valid && valid2
 	} else {
-		return -1
+		return -1, valid && valid2
 	}
 }
 
-func (val FastVal) compareArray(other FastVal) int {
+func (val FastVal) compareArray(other FastVal) (int, bool) {
 	// TODO - need a better way but for now treat them the same
 	return val.compareObjArrData(other)
 }
 
-func (val FastVal) compareObject(other FastVal) int {
+func (val FastVal) compareObject(other FastVal) (int, bool) {
 	// TODO - need a better way but for now treat them the same
 	return val.compareObjArrData(other)
 }
 
-func (val FastVal) compareObjArrData(other FastVal) int {
+func (val FastVal) compareObjArrData(other FastVal) (int, bool) {
 	var same bool
 	// Do not use reflect
 	switch val.dataType {
@@ -431,29 +531,46 @@ func (val FastVal) compareObjArrData(other FastVal) int {
 		fallthrough
 	case ObjectValue:
 		if len(val.sliceData) > len(other.sliceData) {
-			return 1
+			return 1, true
 		} else if len(val.sliceData) < len(other.sliceData) {
-			return -1
+			return -1, true
 		} else {
 			same = true
 			for i := range val.sliceData {
 				if val.sliceData[i] > other.sliceData[i] {
-					return 1
+					return 1, true
 				} else if val.sliceData[i] < other.sliceData[i] {
-					return -1
+					return -1, true
 				}
 			}
 		}
 	}
 	if same {
-		return 0
+		return 0, true
 	} else {
-		return -1
+		return -1, true
 	}
 }
 
+// This is really using other as the baseline for calling compare,
+// and then reversing the result
+// This is so that comparisons between different data types are bidirectionally consistent
+func (val FastVal) reverseCompare(other FastVal) (int, bool) {
+	result, valid := other.Compare(val)
+	return result * -1, valid
+}
+
+// Compares based on the LHS literal. If unable, then attempt casting to the RHS
+func (val FastVal) Compare(other FastVal) (int, bool) {
+	ret, valid := val.compareInternal(other)
+	if !valid {
+		ret, valid = val.reverseCompare(other)
+	}
+	return ret, valid
+}
+
 // Returns compared val and boolean indicating if the comparison is valid
-func (val FastVal) Compare(other FastVal) int {
+func (val FastVal) compareInternal(other FastVal) (int, bool) {
 	switch val.dataType {
 	case IntValue:
 		return val.compareInt(other)
@@ -483,27 +600,44 @@ func (val FastVal) Compare(other FastVal) int {
 		return val.compareArray(other)
 	case ObjectValue:
 		return val.compareObject(other)
+	case NullValue:
+		return val.compareNull(other)
 	}
 
 	if val.dataType < other.dataType {
-		return -1
+		return -1, true
 	} else if val.dataType > other.dataType {
-		return 1
+		return 1, true
 	} else {
-		return 0
+		return 0, true
 	}
 }
 
-func (val FastVal) Equals(other FastVal) bool {
-	return val.Compare(other) == 0
+func (val FastVal) Equals(other FastVal) (bool, bool) {
+	result, valid := val.compareInternal(other)
+	if !valid {
+		// For equality, if invalid comparison, force a valid inequality
+		return false, true
+	} else {
+		return result == 0, true
+	}
 }
 
-func (val FastVal) matchStrings(other FastVal) bool {
-	escVal, _ := val.ToJsonString()
-	return other.AsRegex().Match(escVal.sliceData)
+func (val FastVal) matchStrings(other FastVal) (bool, bool) {
+	escVal, err := val.toJsonStringInternal()
+	if err != nil {
+		return false, false
+	}
+
+	regex, valid := other.AsRegex()
+	if !valid {
+		return false, valid
+	} else {
+		return regex.Match(escVal.sliceData), true
+	}
 }
 
-func (val FastVal) Matches(other FastVal) bool {
+func (val FastVal) Matches(other FastVal) (bool, bool) {
 	switch val.dataType {
 	case StringValue:
 		return val.matchStrings(other)
@@ -512,7 +646,7 @@ func (val FastVal) Matches(other FastVal) bool {
 	case JsonStringValue:
 		return val.matchStrings(other)
 	default:
-		return false
+		return false, false
 	}
 }
 

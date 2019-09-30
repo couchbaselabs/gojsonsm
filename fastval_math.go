@@ -23,7 +23,10 @@ var mathRadiansFunc func(float64) float64 = func(deg float64) float64 {
 
 func FastValMathRound(val FastVal) FastVal {
 	if val.IsFloat() {
-		originalValue := val.AsFloat()
+		originalValue, valid := val.AsFloat()
+		if !valid {
+			return NewInvalidFastVal()
+		}
 		roundedValue := floatMathRound(originalValue)
 		return NewFloatFastVal(roundedValue)
 	} else if val.IsInt() || val.IsUInt() {
@@ -39,10 +42,14 @@ func FastValMathAbs(val FastVal) FastVal {
 		// Not gonna do abs on an uint
 		return val
 	} else {
+		floatVal, valid := val.AsFloat()
+		if !valid {
+			return NewInvalidFastVal()
+		}
 		if val.IsFloat() {
-			return NewFloatFastVal(math.Abs(val.AsFloat()))
+			return NewFloatFastVal(math.Abs(floatVal))
 		} else if val.IsInt() {
-			return NewIntFastVal(int64(math.Abs(val.AsFloat())))
+			return NewIntFastVal(int64(math.Abs(floatVal)))
 		}
 	}
 
@@ -79,35 +86,41 @@ func fastValNegate(a float64) float64 {
 }
 
 func genericFastValIntOp(val FastVal, op intToIntOp) FastVal {
-	if val.IsNumeric() {
-		return NewIntFastVal(op(val.AsInt()))
+	intVal, valid := val.AsInt()
+	if valid && val.IsNumeric() {
+		return NewIntFastVal(op(intVal))
 	}
 
 	return NewInvalidFastVal()
 }
 
 func genericFastVal2IntsOp(val, val1 FastVal, op int2ToIntOp) FastVal {
-	if !val.IsNumeric() || !val1.IsNumeric() {
+	valInt, valid := val.AsInt()
+	val1Int, valid2 := val1.AsInt()
+	if !val.IsNumeric() || !val1.IsNumeric() || !valid || !valid2 {
 		return NewInvalidFastVal()
 	}
 
-	return NewIntFastVal(op(val.AsInt(), val1.AsInt()))
+	return NewIntFastVal(op(valInt, val1Int))
 }
 
 func genericFastValFloatOp(val FastVal, op floatToFloatOp) FastVal {
-	if val.IsNumeric() {
-		return NewFloatFastVal(op(val.AsFloat()))
+	valFloat, valid := val.AsFloat()
+	if valid && val.IsNumeric() {
+		return NewFloatFastVal(op(valFloat))
 	}
 
 	return NewInvalidFastVal()
 }
 
 func genericFastVal2FloatsOp(val, val1 FastVal, op float2ToFloatOp) FastVal {
-	if !val.IsNumeric() || !val1.IsNumeric() {
+	valFloat, valid := val.AsFloat()
+	val1Float, valid2 := val1.AsFloat()
+	if !val.IsNumeric() || !val1.IsNumeric() || !valid || !valid2 {
 		return NewInvalidFastVal()
 	}
 
-	return NewFloatFastVal(op(val.AsFloat(), val1.AsFloat()))
+	return NewFloatFastVal(op(valFloat, val1Float))
 }
 
 func FastValMathSqrt(val FastVal) FastVal {

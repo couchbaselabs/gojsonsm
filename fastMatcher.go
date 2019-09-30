@@ -265,27 +265,39 @@ func (m *FastMatcher) matchOp(op *OpNode, litVal *FastVal) error {
 	}
 
 	var opRes bool
+	var validOp bool
+	var compareOut int
 	switch op.Op {
 	case OpTypeEquals:
-		opRes = lhsVal.Equals(rhsVal)
+		opRes, validOp = lhsVal.Equals(rhsVal)
 	case OpTypeLessThan:
-		opRes = lhsVal.Compare(rhsVal) < 0
+		compareOut, validOp = lhsVal.Compare(rhsVal)
+		opRes = compareOut < 0
 	case OpTypeLessEquals:
-		opRes = lhsVal.Compare(rhsVal) <= 0
+		compareOut, validOp = lhsVal.Compare(rhsVal)
+		opRes = compareOut <= 0
 	case OpTypeGreaterThan:
-		opRes = lhsVal.Compare(rhsVal) > 0
+		compareOut, validOp = lhsVal.Compare(rhsVal)
+		opRes = compareOut > 0
 	case OpTypeGreaterEquals:
-		opRes = lhsVal.Compare(rhsVal) >= 0
+		compareOut, validOp = lhsVal.Compare(rhsVal)
+		opRes = compareOut >= 0
 	case OpTypeMatches:
-		opRes = lhsVal.Matches(rhsVal)
+		opRes, validOp = lhsVal.Matches(rhsVal)
 	case OpTypeExists:
 		opRes = true
+		validOp = true
 	default:
 		panic("invalid op type")
 	}
 
 	// Mark the result of this operation
-	m.buckets.MarkNode(bucketIdx, opRes)
+	if !validOp {
+		// TODO FIX
+		m.buckets.MarkNode(bucketIdx, false)
+	} else {
+		m.buckets.MarkNode(bucketIdx, opRes)
+	}
 
 	// Check if running this values ops has resolved the entirety
 	// of the expression, if so we can leave immediately.
@@ -498,7 +510,11 @@ func (m *FastMatcher) matchLoop(token tokenType, tokenData []byte, loop *LoopNod
 	m.buckets.SetStallIndex(previousStallIndex)
 
 	// Apply the overall loop result to the binary tree
-	m.buckets.MarkNode(loopBucketIdx, loopState)
+	if loopState {
+		m.buckets.MarkNode(loopBucketIdx, true)
+	} else {
+		m.buckets.MarkNode(loopBucketIdx, false)
+	}
 
 	return nil
 }
