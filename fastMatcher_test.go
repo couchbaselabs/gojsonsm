@@ -158,9 +158,9 @@ func TestMatcherNotTrueEquals(t *testing.T) {
 }
 
 func TestMatcherMissingNotEquals(t *testing.T) {
-	// This tests a specific case where a missing value should actually
-	// result in a truthy result in the expression.  Due to the nature
-	// of our bintree implementation, this needs special handling.
+	// This tests a specific case where both missing value and false booleans
+	// will return truthy results, since the "true" value here translates to
+	// a true boolean
 	runJSONExprMatchTest(t, `
 		["not",
 		  ["equals",
@@ -169,7 +169,6 @@ func TestMatcherMissingNotEquals(t *testing.T) {
 		]
 	  ]
 	`, []string{
-		"5b47eb0950e9076fc0aecd52",
 		"5b47eb093771f06ced629663",
 		"5b47eb09ffac5a6ce37042e7",
 		"5b47eb095c3ad73b9925f7f8",
@@ -177,6 +176,8 @@ func TestMatcherMissingNotEquals(t *testing.T) {
 		"5b47eb09996a4154c35b2f98",
 		"5b47eb091f57571d3c3b1aa1",
 		"5b47eb098eee4b4c4330ec64",
+		"5b47eb0936ff92a567a0307e",
+		"5b47eb096b1d911c0b9492fb",
 	})
 }
 
@@ -211,22 +212,6 @@ func TestMatcherNotExists(t *testing.T) {
 		"5b47eb09996a4154c35b2f98",
 		"5b47eb091f57571d3c3b1aa1",
 		"5b47eb098eee4b4c4330ec64",
-	})
-}
-
-func TestMatcherDisparateTypeEquals(t *testing.T) {
-	// TODO(brett19): Should probably discuss whether type-cast equals
-	// actually makes sense... This validates that these something like:
-	//  (true == "thisShouldBeABoolean") === true
-	// which may not actually make a whole lot of sense...
-	runJSONExprMatchTest(t, `
-		["equals",
-	    ["field", "sometimesValue"],
-	    ["value", "thisShouldBeABoolean"]
-	  ]
-	`, []string{
-		"5b47eb0936ff92a567a0307e",
-		"5b47eb096b1d911c0b9492fb",
 	})
 }
 

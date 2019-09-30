@@ -290,7 +290,7 @@ OR
 	assert.Equal("field2", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.RHS.FieldWMath.Type1.Field.String())
 
 	fe = &FilterExpression{}
-	err = parser.ParseString("fieldpath.path IS NOT NULL", fe)
+	err = parser.ParseString("fieldpath.path IS NOT NULL AND fieldpath.path2 IS NOT NULL", fe)
 	assert.Nil(err)
 	assert.Equal("fieldpath", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[0].String())
 	assert.Equal("path", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type1.Field.Path[1].String())
@@ -302,7 +302,8 @@ OR
 	m := NewFastMatcher(matchDef)
 	userData := map[string]interface{}{
 		"fieldpath": map[string]interface{}{
-			"path": 0,
+			"path":  0,
+			"path2": "string",
 		},
 	}
 	udMarsh, _ := json.Marshal(userData)
@@ -369,8 +370,16 @@ OR
 			"field1": -2,
 			"field2": 2e30,
 		},
-		"oneVar":  true,
-		"oneList": []uint16{1, 2, 3, 4},
+		"oneVar":     true,
+		"oneList":    []uint16{1, 2, 3, 4},
+		"nullVal":    nil,
+		"int":        12,
+		"negInt":     -12,
+		"zeroint":    0,
+		"float":      0.12,
+		"bool":       true,
+		"string":     "a temporary string",
+		"nullString": "null",
 	}
 	udMarsh, _ = json.Marshal(userData)
 	match, err = m.Match(udMarsh)
@@ -411,6 +420,66 @@ OR
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("onePath = onePathCopy", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	// Mixed-mode Comparisons
+	// Null comparison
+	fe = &FilterExpression{}
+	err = parser.ParseString("nullVal < 10 AND 10 > nullVal AND negInt > nullVal AND nullVal < negInt AND nullVal < int AND int > nullVal AND NOT nullVal IS NOT NULL AND nullVal IS NULL AND \"string\" > `nullVal` AND NOT \"abc\" < `nullVal` AND nullVal != \"aString\" AND nullVal < \"string\"", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("string IS NOT NULL AND nullString IS NOT NULL", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	// int and string comparison
+	fe = &FilterExpression{}
+	err = parser.ParseString("int == \"12\" AND float > \"0.1\" AND NOT float == \"invalidFloatStr\" AND string < \"b\" AND string > 123 AND string != -24435", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	// Boolean and int comparisons
+	fe = &FilterExpression{}
+	err = parser.ParseString("bool == 1.0 AND NOT 24 < bool AND bool == \"trUE\" AND bool == -145 AND int > false AND zeroint == false", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	// Reverse compare - casting a string to int in this case isn't possible
+	fe = &FilterExpression{}
+	err = parser.ParseString("int > \"0a\"", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
@@ -904,6 +973,17 @@ OR
 	assert.True(match)
 
 	fe = &FilterExpression{}
+	err = parser.ParseString("ASIN(int)==3.05682983181e+307", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	m = NewFastMatcher(matchDef)
+	assert.NotNil(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.False(match)
+
+	fe = &FilterExpression{}
 	err = parser.ParseString("ATAN(int)<>3.05682983181e+307", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
@@ -927,6 +1007,17 @@ OR
 
 	fe = &FilterExpression{}
 	err = parser.ParseString("ATAN(int2)<>3.05682983181e+307", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	m = NewFastMatcher(matchDef)
+	assert.NotNil(matchDef)
+	match, err = m.Match(udMarsh)
+	assert.True(match)
+
+	fe = &FilterExpression{}
+	err = parser.ParseString("ACOS(int2)<3.05682983181e+307", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)

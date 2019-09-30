@@ -347,9 +347,9 @@ func (state *binTreeState) checkNode(index int) {
 		return
 	} else if defNode.NodeType == nodeTypeNot {
 		if state.data[defNode.Left] == binTreeStateTrue {
-			state.MarkNode(index, !true)
+			state.MarkNode(index, false)
 		} else if state.data[defNode.Left] == binTreeStateFalse {
-			state.MarkNode(index, !false)
+			state.MarkNode(index, true)
 		}
 		return
 	} else if defNode.NodeType == nodeTypeLoop {
@@ -374,6 +374,7 @@ func (state *binTreeState) MarkNode(index int, value bool) {
 	} else {
 		state.data[index] = binTreeStateFalse
 	}
+
 	state.resolveRecursive(index)
 
 	// We are done if we are the root node
