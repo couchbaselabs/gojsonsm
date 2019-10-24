@@ -325,6 +325,9 @@ OR
 	assert.Nil(err)
 	matchDef = trans.Transform([]Expression{expr})
 	assert.NotNil(matchDef)
+	valueFastVal, ok := matchDef.ParseNode.Elems["fieldpath"].Elems["path"].Ops[0].Rhs.(FastVal)
+	assert.True(ok)
+	assert.True(valueFastVal.userDefined)
 	m = NewFastMatcher(matchDef)
 	userData = map[string]interface{}{
 		"fieldpath": map[string]interface{}{
@@ -432,7 +435,7 @@ OR
 	// Mixed-mode Comparisons
 	// Null comparison
 	fe = &FilterExpression{}
-	err = parser.ParseString("nullVal < 10 AND 10 > nullVal AND negInt > nullVal AND nullVal < negInt AND nullVal < int AND int > nullVal AND NOT nullVal IS NOT NULL AND nullVal IS NULL AND \"string\" > `nullVal` AND NOT \"abc\" < `nullVal` AND nullVal != \"aString\" AND nullVal < \"string\"", fe)
+	err = parser.ParseString("nullVal IS NULL AND negInt > nullVal AND nullVal < negInt AND nullVal < int AND int > nullVal AND NOT nullVal IS NOT NULL AND nullVal IS NULL AND \"string\" > `nullVal` AND NOT \"abc\" < `nullVal` AND nullVal != \"aString\" AND nullVal < \"string\"", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
@@ -453,9 +456,22 @@ OR
 	match, err = m.Match(udMarsh)
 	assert.True(match)
 
-	// int and string comparison
+	// int and string comparison - force implicit conversion to user-specified datatype
 	fe = &FilterExpression{}
 	err = parser.ParseString("int == \"12\" AND float > \"0.1\" AND NOT float == \"invalidFloatStr\" AND string < \"b\" AND string > 123 AND string != -24435", fe)
+	assert.Nil(err)
+	expr, err = fe.OutputExpression()
+	assert.Nil(err)
+	matchDef = trans.Transform([]Expression{expr})
+	assert.NotNil(matchDef)
+	m = NewFastMatcher(matchDef)
+	match, status, err := m.MatchWithStatus(udMarsh)
+	assert.True(match)
+	assert.Equal(MatcherCollateUsed, status)
+
+	// Negative test case - string cannot be converted to user-defined int, and int is less than string in collate
+	fe = &FilterExpression{}
+	err = parser.ParseString("string > 123", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
@@ -467,7 +483,7 @@ OR
 
 	// Boolean and int comparisons
 	fe = &FilterExpression{}
-	err = parser.ParseString("bool == 1.0 AND NOT 24 < bool AND bool == \"trUE\" AND bool == -145 AND int > false AND zeroint == false", fe)
+	err = parser.ParseString("bool == 1.0 AND NOT 24 < bool AND bool == \"true\" AND bool > -145 AND int > false AND zeroint == false", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
@@ -898,7 +914,7 @@ OR
 
 	// MB-34861 - alternative math method
 	fe = &FilterExpression{}
-	err = parser.ParseString("1 / achievements = 0.25", fe)
+	err = parser.ParseString("1.0 / achievements = 0.25", fe)
 	assert.Nil(err)
 	assert.Equal("1", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type0.MathValue.String())
 	assert.Equal("achievements", fe.FilterExpr.Expr[0].Expr[0].Expr.Operand.LHS.FieldWMath.Type0.Field.Path[0].String())
@@ -929,7 +945,7 @@ OR
 	assert.True(match)
 
 	fe = &FilterExpression{}
-	err = parser.ParseString("ABS(1025 / -achievements) = 256.25", fe)
+	err = parser.ParseString("ABS(1025.0 / -achievements) = 256.25", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
@@ -962,7 +978,7 @@ OR
 	assert.True(match)
 
 	fe = &FilterExpression{}
-	err = parser.ParseString("ASIN(int)<>3.05682983181e+307 AND ASIN(int) != ASIN(int) AND NOT ASIN(int) > ASIN(int) AND NOT ASIN(int) <= ASIN(int)", fe)
+	err = parser.ParseString("ASIN(int)<>3.05682983181e+307 AND ASIN(int) != ASIN(int) AND NOT ASIN(int) > ASIN(int) AND NOT ASIN(int) < ASIN(int)", fe)
 	assert.Nil(err)
 	expr, err = fe.OutputExpression()
 	assert.Nil(err)
@@ -1184,8 +1200,10 @@ OR
 		},
 	}
 	udMarsh, _ = json.Marshal(userData)
-	match, err = m.Match(udMarsh)
+	match, flags, err := m.MatchWithStatus(udMarsh)
 	assert.True(match)
+	assert.Nil(err)
+	assert.Equal(flags, MatcherCollateUsed)
 }
 
 func readJsonHelper(fileName string) (retMap map[string]interface{}, byteSlice []byte, err error) {

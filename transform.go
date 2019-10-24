@@ -299,16 +299,21 @@ func (t *Transformer) makeDataRefRecurse(expr Expression, context nodeRef, isRoo
 		if val.IsString() {
 			val, _ = val.ToJsonString()
 		}
+		val.userDefined = true
 		return val, nil
 	case RegexExpr:
 		regex, err := regexp.Compile(expr.Regex.(string))
 		if err != nil {
 			return nil, errors.New("failed to compile RegexExpr: " + err.Error())
 		}
-		return NewFastVal(regex), nil
+		val := NewFastVal(regex)
+		val.userDefined = true
+		return val, nil
 	case PcreExpr:
 		pcreWrapper, err := MakePcreWrapper(expr.Pcre.(string))
-		return NewFastVal(pcreWrapper), err
+		val := NewFastVal(pcreWrapper)
+		val.userDefined = true
+		return val, err
 	case FuncExpr:
 		var params []DataRef
 
@@ -325,7 +330,9 @@ func (t *Transformer) makeDataRefRecurse(expr Expression, context nodeRef, isRoo
 			Params:   params,
 		}, nil
 	case TimeExpr:
-		return GetNewTimeFastVal(expr.Time.(string))
+		val, err := GetNewTimeFastVal(expr.Time.(string))
+		val.userDefined = true
+		return val, err
 	}
 
 	return nil, errors.New("unsupported expression in parameter")

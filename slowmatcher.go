@@ -306,6 +306,12 @@ func (m *SlowMatcher) Match(data []byte) (bool, error) {
 	return matched, nil
 }
 
+func (m *SlowMatcher) MatchWithStatus(data []byte) (bool, int, error) {
+	// pass through
+	matched, err := m.Match(data)
+	return matched, MatcherNoStatus, err
+}
+
 func (m *SlowMatcher) ExpressionMatched(expressionIdx int) bool {
 	return m.exprMatches[expressionIdx]
 }
