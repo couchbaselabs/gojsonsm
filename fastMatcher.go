@@ -14,10 +14,11 @@ type slotData struct {
 var emptySlotData slotData
 
 type FastMatcher struct {
-	def     MatchDef
-	slots   []slotData
-	buckets *binTreeState
-	tokens  jsonTokenizer
+	def         MatchDef
+	slots       []slotData
+	buckets     *binTreeState
+	tokens      jsonTokenizer
+	collateUsed bool
 }
 
 func NewFastMatcher(def *MatchDef) *FastMatcher {
@@ -292,11 +293,10 @@ func (m *FastMatcher) matchOp(op *OpNode, litVal *FastVal) error {
 	}
 
 	// Mark the result of this operation
+	m.buckets.MarkNode(bucketIdx, opRes)
+
 	if !validOp {
-		// TODO FIX
-		m.buckets.MarkNode(bucketIdx, false)
-	} else {
-		m.buckets.MarkNode(bucketIdx, opRes)
+		m.collateUsed = true
 	}
 
 	// Check if running this values ops has resolved the entirety
@@ -830,6 +830,15 @@ func (m *FastMatcher) Match(data []byte) (bool, error) {
 	m.buckets.Resolve()
 
 	return m.buckets.IsTrue(0), nil
+}
+
+func (m *FastMatcher) MatchWithStatus(data []byte) (bool, int, error) {
+	var statusFlags int
+	matched, err := m.Match(data)
+	if m.collateUsed {
+		statusFlags |= MatcherCollateUsed
+	}
+	return matched, statusFlags, err
 }
 
 func (m *FastMatcher) ExpressionMatched(expressionIdx int) bool {

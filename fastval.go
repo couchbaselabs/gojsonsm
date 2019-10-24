@@ -16,41 +16,85 @@ import (
 type ValueType int
 
 // This must be in comparison precedence order!
+// Mirrors as closely as possible with N1QL Collate order
 const (
 	InvalidValue ValueType = iota
 	MissingValue
-	IntValue
+	NullValue
+	FalseValue
+	TrueValue
+	// Numerics:
 	UintValue
-	JsonIntValue
 	JsonUintValue
+	IntValue
+	JsonIntValue
 	FloatValue
 	JsonFloatValue
+	// String types
 	StringValue
 	BinStringValue
 	JsonStringValue
-	RegexValue
-	PcreValue
-	BinaryValue
-	NullValue
-	TrueValue
-	FalseValue
+	// Time can only be implicitly converted from a specific string form
+	TimeValue
+	// Array Obj
 	ArrayValue
 	ObjectValue
-	TimeValue
+	// Binary types
+	BinaryValue
+	RegexValue
+	PcreValue
 )
+
+// Implicit Conversion Table
+// Keyed by type, and then a list of potentially convertible target datatype with
+// "true" for definitely convertible and "false" for potentially convertible
+// If a ValueType does not exist in this table, that means there is no possible target conversion
+var ImplicitConvTable = map[ValueType]map[ValueType]bool{
+	// Numerics
+	IntValue: map[ValueType]bool{UintValue: false, JsonUintValue: false, FloatValue: true, JsonFloatValue: true,
+		StringValue: true, BinStringValue: true, JsonStringValue: true, NullValue: true, TrueValue: true, FalseValue: true},
+	JsonIntValue: map[ValueType]bool{UintValue: false, JsonUintValue: false, FloatValue: true, JsonFloatValue: true,
+		StringValue: true, BinStringValue: true, JsonStringValue: true, NullValue: true, TrueValue: true, FalseValue: true},
+	UintValue: map[ValueType]bool{IntValue: true, JsonIntValue: true, FloatValue: true, JsonFloatValue: true, StringValue: true,
+		BinStringValue: true, JsonStringValue: true, NullValue: true, TrueValue: true, FalseValue: true},
+	JsonUintValue: map[ValueType]bool{IntValue: true, JsonIntValue: true, FloatValue: true, JsonFloatValue: true, StringValue: true,
+		BinStringValue: true, JsonStringValue: true, NullValue: true, TrueValue: true, FalseValue: true},
+	FloatValue: map[ValueType]bool{StringValue: true, BinStringValue: true, JsonStringValue: true, NullValue: true, TrueValue: true,
+		FalseValue: true},
+	JsonFloatValue: map[ValueType]bool{StringValue: true, BinStringValue: true, JsonStringValue: true, NullValue: true, TrueValue: true,
+		FalseValue: true},
+	// Non-Numerics
+	TrueValue: map[ValueType]bool{IntValue: true, JsonIntValue: true, UintValue: true, JsonUintValue: true, FloatValue: true,
+		JsonFloatValue: true, StringValue: true, BinStringValue: true, JsonStringValue: true, NullValue: true, FalseValue: true},
+	FalseValue: map[ValueType]bool{IntValue: true, JsonIntValue: true, UintValue: true, JsonUintValue: true, FloatValue: true,
+		JsonFloatValue: true, StringValue: true, BinStringValue: true, JsonStringValue: true, NullValue: true, TrueValue: true},
+	StringValue: map[ValueType]bool{IntValue: false, JsonIntValue: false, UintValue: false, JsonUintValue: false, FloatValue: false,
+		JsonFloatValue: false, NullValue: true, TrueValue: false, FalseValue: false, TimeValue: false},
+	BinStringValue: map[ValueType]bool{IntValue: false, JsonIntValue: false, UintValue: false, JsonUintValue: false, FloatValue: false,
+		JsonFloatValue: false, NullValue: true, TrueValue: false, FalseValue: false, TimeValue: false},
+	JsonStringValue: map[ValueType]bool{IntValue: false, JsonIntValue: false, UintValue: false, JsonUintValue: false, FloatValue: false,
+		JsonFloatValue: false, NullValue: true, TrueValue: false, FalseValue: false, TimeValue: false},
+}
 
 // When users try to match a string to a bool, the bool is converted to a JSON string
 // These are constants
-var TrueValueBytes = []byte("true")
-var FalseValueBytes = []byte("false")
+const TrueString = "true"
+const FalseString = "false"
+
+var TrueValueBytes = []byte(TrueString)
+var FalseValueBytes = []byte(FalseString)
+
+var TrueStringRegex *regexp.Regexp = regexp.MustCompile("^[T|t][R|r][U|u][E|e]$")
+var FalseStringRegex *regexp.Regexp = regexp.MustCompile("^[F|f][A|a][L|l][S|s][E|e]$")
 
 var toJsonStringBuffer []byte
 
 type FastVal struct {
-	dataType  ValueType
-	data      interface{}
-	sliceData []byte
-	rawData   [8]byte
+	dataType    ValueType
+	data        interface{}
+	sliceData   []byte
+	rawData     [8]byte
+	userDefined bool
 }
 
 func (val FastVal) String() string {
@@ -178,9 +222,12 @@ func (val FastVal) AsInt() (int64, bool) {
 	case IntValue:
 		return val.GetInt(), true
 	case UintValue:
-		return int64(val.GetUint()), true
+		uintVal := val.GetUint()
+		return int64(uintVal), uintVal <= math.MaxInt64
 	case FloatValue:
-		return int64(val.GetFloat()), true
+		return int64(val.GetFloat()), false
+	case BinStringValue:
+		fallthrough
 	case JsonStringValue:
 		fallthrough
 	case JsonIntValue:
@@ -188,16 +235,18 @@ func (val FastVal) AsInt() (int64, bool) {
 		return parsedVal, err == nil
 	case JsonUintValue:
 		parsedVal, err := strconv.ParseUint(string(val.sliceData), 10, 64)
-		return int64(parsedVal), err == nil
+		if err == nil && parsedVal > math.MaxInt64 {
+			return 0, false
+		} else {
+			return int64(parsedVal), err == nil
+		}
 	case JsonFloatValue:
-		parsedVal, err := strconv.ParseFloat(string(val.sliceData), 64)
-		return int64(parsedVal), err == nil
+		parsedVal, _ := strconv.ParseFloat(string(val.sliceData), 64)
+		return int64(parsedVal), false
 	case TrueValue:
 		return 1, true
 	case FalseValue:
 		return 0, true
-	case NullValue:
-		return 0, false
 	}
 	return 0, false
 }
@@ -205,16 +254,29 @@ func (val FastVal) AsInt() (int64, bool) {
 func (val FastVal) AsUint() (uint64, bool) {
 	switch val.dataType {
 	case IntValue:
-		return uint64(val.GetInt()), true
+		intVal := val.GetInt()
+		if intVal > 0 {
+			return uint64(intVal), true
+		} else {
+			return 0, false
+		}
 	case UintValue:
 		return val.GetUint(), true
 	case FloatValue:
-		return uint64(val.GetFloat()), true
+		return uint64(val.GetFloat()), false
 	case JsonIntValue:
 		parsedVal, err := strconv.ParseInt(string(val.sliceData), 10, 64)
-		return uint64(parsedVal), err == nil
-	case JsonStringValue:
+		if err == nil && parsedVal > 0 {
+			return uint64(parsedVal), true
+		} else {
+			return 0, false
+		}
+	case BinStringValue:
 		fallthrough
+	case JsonStringValue:
+		tmpVal, _ := val.ToBinString()
+		parsedVal, err := strconv.ParseUint(string(tmpVal.sliceData), 10, 64)
+		return parsedVal, err == nil
 	case JsonUintValue:
 		parsedVal, err := strconv.ParseUint(string(val.sliceData), 10, 64)
 		return parsedVal, err == nil
@@ -225,8 +287,6 @@ func (val FastVal) AsUint() (uint64, bool) {
 		return 1, true
 	case FalseValue:
 		return 0, true
-	case NullValue:
-		return uint64(0), false
 	}
 	return 0, false
 }
@@ -254,21 +314,16 @@ func (val FastVal) AsFloat() (float64, bool) {
 		return 1.0, true
 	case FalseValue:
 		return 0.0, true
-	case NullValue:
-		return 0.0, false
 	}
 	return 0.0, false
 }
 
-var JsonStringTrueRegexp *regexp.Regexp = regexp.MustCompile("^[T|t][R|r][U|u][E|e]$")
-var JsonStringFalseRegexp *regexp.Regexp = regexp.MustCompile("^[F|f][A|a][L|l][S|s][E|e]$")
-
 func (val FastVal) AsBoolean() (bool, bool) {
 	switch val.dataType {
 	case JsonStringValue:
-		if JsonStringTrueRegexp.Match(val.sliceData) {
+		if TrueStringRegex.Match(val.sliceData) {
 			return true, true
-		} else if JsonStringFalseRegexp.Match(val.sliceData) {
+		} else if FalseStringRegex.Match(val.sliceData) {
 			return false, true
 		} else {
 			return false, false
@@ -298,6 +353,35 @@ func (val FastVal) AsBoolean() (bool, bool) {
 	}
 }
 
+func (val FastVal) AsString() (string, bool) {
+	switch val.dataType {
+	case StringValue:
+		return val.data.(string), true
+	case JsonStringValue:
+		fallthrough
+	case BinStringValue:
+		tmpVal, _ := val.ToBinString()
+		return string(tmpVal.sliceData), true
+	case IntValue:
+		return fmt.Sprintf("%d", val.GetInt()), true
+	case UintValue:
+		return fmt.Sprintf("%d", val.GetUint()), true
+	case FloatValue:
+		return fmt.Sprintf("%f", val.GetFloat()), true
+	case JsonIntValue:
+		return string(val.sliceData), true
+	case JsonUintValue:
+		return string(val.sliceData), true
+	case JsonFloatValue:
+		return string(val.sliceData), true
+	case TrueValue:
+		return TrueString, true
+	case FalseValue:
+		return FalseString, true
+	}
+	return "", false
+}
+
 func (val FastVal) AsRegex() (FastValRegexIface, bool) {
 	switch val.dataType {
 	case RegexValue:
@@ -312,6 +396,15 @@ func (val FastVal) AsTime() (*time.Time, bool) {
 	switch val.dataType {
 	case TimeValue:
 		return val.data.(*time.Time), true
+	case StringValue:
+		fallthrough
+	case JsonStringValue:
+		fallthrough
+	case BinStringValue:
+		timeFastVal, err := GetNewTimeFastVal(string(val.sliceData))
+		if err == nil {
+			return timeFastVal.data.(*time.Time), true
+		}
 	}
 	return nil, false
 }
@@ -447,7 +540,6 @@ func (val FastVal) compareFloat(other FastVal) (int, bool) {
 		// Documentation wise - they should be aware that NaN ops are undefined
 		// In the meantime - because we have to return something, just let imaginary numbers be < real numbers
 		if math.IsNaN(floatVal) && math.IsNaN(floatOval) {
-			// In go, two NaN's are not the same - thus this should never return 0, so return -1 by default
 			return 0, false
 		} else if math.IsNaN(floatVal) && !math.IsNaN(floatOval) {
 			return -1, false
@@ -488,12 +580,29 @@ func (val FastVal) compareBoolean(other FastVal) (int, bool) {
 }
 
 func (val FastVal) compareStrings(other FastVal) (int, bool) {
-	// TODO: Improve string comparisons to avoid casting or converting
-	escVal, err := val.toJsonStringInternal()
-	escOval, err1 := other.toJsonStringInternal()
+	if other.IsString() || other.IsNumeric() {
+		escVal, err := val.toJsonStringInternal()
+		escOval, err1 := other.toJsonStringInternal()
 
-	result := strings.Compare(string(escVal.sliceData), string(escOval.sliceData))
-	return result, err == nil && err1 == nil
+		result := strings.Compare(string(escVal.sliceData), string(escOval.sliceData))
+		return result, err == nil && err1 == nil
+	} else if other.userDefined {
+		// User defined means that this val should try to implicit convert to the other type
+		switch other.dataType {
+		case TrueValue:
+			fallthrough
+		case FalseValue:
+			if TrueStringRegex.Match(val.sliceData) || FalseStringRegex.Match(val.sliceData) {
+				return val.compareBoolean(other)
+			}
+		case TimeValue:
+			_, err := GetNewTimeFastVal(string(val.sliceData))
+			if err == nil {
+				return val.compareTime(other)
+			}
+		}
+	}
+	return 0, false
 }
 
 func (val FastVal) compareTime(other FastVal) (int, bool) {
@@ -524,7 +633,6 @@ func (val FastVal) compareObject(other FastVal) (int, bool) {
 }
 
 func (val FastVal) compareObjArrData(other FastVal) (int, bool) {
-	var same bool
 	// Do not use reflect
 	switch val.dataType {
 	case ArrayValue:
@@ -535,7 +643,6 @@ func (val FastVal) compareObjArrData(other FastVal) (int, bool) {
 		} else if len(val.sliceData) < len(other.sliceData) {
 			return -1, true
 		} else {
-			same = true
 			for i := range val.sliceData {
 				if val.sliceData[i] > other.sliceData[i] {
 					return 1, true
@@ -543,12 +650,10 @@ func (val FastVal) compareObjArrData(other FastVal) (int, bool) {
 					return -1, true
 				}
 			}
+			return 0, true
 		}
-	}
-	if same {
-		return 0, true
-	} else {
-		return -1, true
+	default:
+		return -1, false
 	}
 }
 
@@ -556,42 +661,224 @@ func (val FastVal) compareObjArrData(other FastVal) (int, bool) {
 // and then reversing the result
 // This is so that comparisons between different data types are bidirectionally consistent
 func (val FastVal) reverseCompare(other FastVal) (int, bool) {
-	result, valid := other.Compare(val)
+	result, valid := other.compareInternal(val)
 	return result * -1, valid
 }
 
-// Compares based on the LHS literal. If unable, then attempt casting to the RHS
-func (val FastVal) Compare(other FastVal) (int, bool) {
-	ret, valid := val.compareInternal(other)
-	if !valid {
-		ret, valid = val.reverseCompare(other)
+// Collate is used when valid comparisons cannot be done
+func (val FastVal) Collate(other FastVal) (int, bool) {
+	if val.dataType == other.dataType {
+		return 0, false
+	} else if val.dataType < other.dataType {
+		return -1, false
+	} else {
+		return 1, false
 	}
-	return ret, valid
+}
+
+func (val FastVal) Compare(other FastVal) (int, bool) {
+	if val.userDefined || other.userDefined {
+		return val.compareUserDefined(other)
+	} else if val.isSameDataTypeAs(other) {
+		return val.compareInternal(other)
+	} else {
+		// Two pass compare - try to cast to the more restrictive type first
+		if val.dataType < other.dataType {
+			compatible := val.checkCompatibility(other)
+			if !compatible {
+				reverseCompatible := other.checkCompatibility(val)
+				if !reverseCompatible {
+					return val.Collate(other)
+				} else {
+					return val.reverseCompare(other)
+				}
+			} else {
+				return val.compareInternal(other)
+			}
+		} else {
+			reverseCompatible := other.checkCompatibility(val)
+			if !reverseCompatible {
+				compatible := val.checkCompatibility(other)
+				if !compatible {
+					return val.Collate(other)
+				} else {
+					return val.compareInternal(other)
+				}
+			} else {
+				return val.reverseCompare(other)
+			}
+		}
+	}
+}
+
+// Shouldn't allow users to have both defined
+func (val FastVal) compareUserDefined(other FastVal) (int, bool) {
+	bothAreNumeric := val.IsNumeric() && other.IsNumeric()
+
+	if val.userDefined {
+		compatible := val.checkCompatibility(other)
+		if !compatible {
+			if bothAreNumeric {
+				return val.reverseCompare(other)
+			}
+			return val.Collate(other)
+		}
+
+		// Force the other to implicitly cast to val if needed
+		return val.compareInternal(other)
+	} else {
+		compatible := other.checkCompatibility(val)
+		if !compatible {
+			if bothAreNumeric {
+				return val.reverseCompare(other)
+			}
+			return val.Collate(other)
+		}
+
+		// Force val to implicitly cast to other if needed
+		return val.reverseCompare(other)
+	}
+}
+
+// Prereq: This call should only be called when "other" is a compatible type
+func (val FastVal) compareNumerics(other FastVal) (int, bool) {
+	switch val.dataType {
+	case JsonIntValue:
+		fallthrough
+	case IntValue:
+		switch other.dataType {
+		case FloatValue:
+			fallthrough
+		case JsonFloatValue:
+			return val.compareFloat(other)
+		case UintValue:
+			fallthrough
+		case JsonUintValue:
+			intVal, _ := val.AsInt()
+			if intVal >= 0 {
+				return val.compareUint(other)
+			} else {
+				return val.compareInt(other)
+			}
+		default:
+			return val.compareInt(other)
+		}
+	case JsonUintValue:
+		fallthrough
+	case UintValue:
+		switch other.dataType {
+		case IntValue:
+			fallthrough
+		case JsonIntValue:
+			intVal, _ := val.AsInt()
+			if intVal >= 0 {
+				return val.compareUint(other)
+			} else {
+				return val.compareInt(other)
+			}
+		case FloatValue:
+			fallthrough
+		case JsonFloatValue:
+			return val.compareFloat(other)
+		default:
+			return val.compareUint(other)
+		}
+	case FloatValue:
+		fallthrough
+	case JsonFloatValue:
+		return val.compareFloat(other)
+	default:
+		panic("Invalid call into compareNumerics")
+	}
+}
+
+func (val FastVal) isSameDataTypeAs(other FastVal) bool {
+	if val.dataType == other.dataType {
+		return true
+	} else if val.IsString() && other.IsString() {
+		return true
+	} else {
+		return false
+	}
+}
+
+// Check if other can be implicitly converted to val type
+func (val FastVal) checkCompatibility(other FastVal) bool {
+	if val.isSameDataTypeAs(other) {
+		return true
+	} else if val.IsNull() {
+		// Anything can be compared with null
+		return true
+	}
+
+	compatibleTypes, ok := ImplicitConvTable[other.dataType]
+	if !ok {
+		// other's datatype cannot be casted to anything else
+		return false
+	}
+
+	fullyCompatible, ok := compatibleTypes[val.dataType]
+	if !ok {
+		// Val's type is not something that is convertible from other
+		return false
+	}
+
+	if fullyCompatible {
+		return true
+	} else {
+		// Need to check to see if it is really convertible
+		var compatible bool
+		switch val.dataType {
+		case TimeValue:
+			_, compatible = other.AsTime()
+		case UintValue:
+			fallthrough
+		case JsonUintValue:
+			_, compatible = other.AsUint()
+		case IntValue:
+			fallthrough
+		case JsonIntValue:
+			_, compatible = other.AsInt()
+		case FloatValue:
+			fallthrough
+		case JsonFloatValue:
+			_, compatible = other.AsFloat()
+		case TrueValue:
+			fallthrough
+		case FalseValue:
+			_, compatible = other.AsBoolean()
+		case StringValue:
+		case BinStringValue:
+		case JsonStringValue:
+			_, compatible = other.AsString()
+		}
+		return compatible
+	}
 }
 
 // Returns compared val and boolean indicating if the comparison is valid
 func (val FastVal) compareInternal(other FastVal) (int, bool) {
 	switch val.dataType {
 	case IntValue:
-		return val.compareInt(other)
+		fallthrough
 	case UintValue:
-		return val.compareUint(other)
+		fallthrough
 	case FloatValue:
-		return val.compareFloat(other)
+		fallthrough
 	case JsonIntValue:
-		return val.compareInt(other)
+		fallthrough
 	case JsonUintValue:
-		return val.compareUint(other)
+		fallthrough
 	case JsonFloatValue:
-		return val.compareFloat(other)
+		return val.compareNumerics(other)
 	case StringValue:
-		return val.compareStrings(other)
+		fallthrough
 	case BinStringValue:
-		return val.compareStrings(other)
+		fallthrough
 	case JsonStringValue:
 		return val.compareStrings(other)
 	case TrueValue:
-		return val.compareBoolean(other)
+		fallthrough
 	case FalseValue:
 		return val.compareBoolean(other)
 	case TimeValue:
@@ -604,23 +891,16 @@ func (val FastVal) compareInternal(other FastVal) (int, bool) {
 		return val.compareNull(other)
 	}
 
-	if val.dataType < other.dataType {
-		return -1, true
-	} else if val.dataType > other.dataType {
-		return 1, true
-	} else {
-		return 0, true
-	}
+	return val.Collate(other)
 }
 
 func (val FastVal) Equals(other FastVal) (bool, bool) {
-	result, valid := val.compareInternal(other)
+	result, valid := val.Compare(other)
+	equals := result == 0
 	if !valid {
-		// For equality, if invalid comparison, force a valid inequality
-		return false, true
-	} else {
-		return result == 0, true
+		equals = false
 	}
+	return equals, valid
 }
 
 func (val FastVal) matchStrings(other FastVal) (bool, bool) {

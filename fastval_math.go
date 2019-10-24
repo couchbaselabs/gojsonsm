@@ -58,6 +58,7 @@ func FastValMathAbs(val FastVal) FastVal {
 
 type intToIntOp func(int64) int64
 type int2ToIntOp func(int64, int64) int64
+type uint2ToUintOp func(uint64, uint64) uint64
 type floatToFloatOp func(float64) float64
 type float2ToFloatOp func(float64, float64) float64
 
@@ -65,7 +66,23 @@ func fastValMathAdd(a, b float64) float64 {
 	return a + b
 }
 
+func fastValMathAddInt(a, b int64) int64 {
+	return a + b
+}
+
+func fastValMathAddUint(a, b uint64) uint64 {
+	return a + b
+}
+
 func fastValMathSub(a, b float64) float64 {
+	return a - b
+}
+
+func fastValMathSubInt(a, b int64) int64 {
+	return a - b
+}
+
+func fastValMathSubUint(a, b uint64) uint64 {
 	return a - b
 }
 
@@ -73,7 +90,23 @@ func fastValMathMult(a, b float64) float64 {
 	return a * b
 }
 
+func fastValMathMultInt(a, b int64) int64 {
+	return a * b
+}
+
+func fastValMathMultUint(a, b uint64) uint64 {
+	return a * b
+}
+
 func fastValMathDiv(a, b float64) float64 {
+	return a / b
+}
+
+func fastValMathDivInt(a, b int64) int64 {
+	return a / b
+}
+
+func fastValMathDivUint(a, b uint64) uint64 {
 	return a / b
 }
 
@@ -81,17 +114,16 @@ func fastValMathMod(a, b int64) int64 {
 	return a % b
 }
 
+func fastValMathModUint(a, b uint64) uint64 {
+	return a % b
+}
+
 func fastValNegate(a float64) float64 {
 	return -1.0 * a
 }
 
-func genericFastValIntOp(val FastVal, op intToIntOp) FastVal {
-	intVal, valid := val.AsInt()
-	if valid && val.IsNumeric() {
-		return NewIntFastVal(op(intVal))
-	}
-
-	return NewInvalidFastVal()
+func fastValNegateInt(a int64) int64 {
+	return -1 * a
 }
 
 func genericFastVal2IntsOp(val, val1 FastVal, op int2ToIntOp) FastVal {
@@ -102,6 +134,25 @@ func genericFastVal2IntsOp(val, val1 FastVal, op int2ToIntOp) FastVal {
 	}
 
 	return NewIntFastVal(op(valInt, val1Int))
+}
+
+func genericFastVal2UintsOp(val, val1 FastVal, op uint2ToUintOp) FastVal {
+	valUint, valid := val.AsUint()
+	val1Uint, valid2 := val1.AsUint()
+	if !val.IsNumeric() || !val1.IsNumeric() || !valid || !valid2 {
+		return NewInvalidFastVal()
+	}
+
+	return NewUintFastVal(op(valUint, val1Uint))
+}
+
+func genericFastValIntOp(val FastVal, op intToIntOp) FastVal {
+	intVal, valid := val.AsInt()
+	if valid && val.IsNumeric() {
+		return NewIntFastVal(op(intVal))
+	}
+
+	return NewInvalidFastVal()
 }
 
 func genericFastValFloatOp(val FastVal, op floatToFloatOp) FastVal {
@@ -187,26 +238,341 @@ func FastValMathRadians(val FastVal) FastVal {
 	return genericFastValFloatOp(val, mathRadiansFunc)
 }
 
-func FastValMathAdd(val, val1 FastVal) FastVal {
-	return genericFastVal2FloatsOp(val, val1, fastValMathAdd)
+func fastValMathAddMultSharedLogic(val, val1 FastVal, intOp int2ToIntOp, uintOp uint2ToUintOp, floatOp float2ToFloatOp) FastVal {
+	switch val.dataType {
+	case UintValue:
+		fallthrough
+	case JsonUintValue:
+		switch val1.dataType {
+		case UintValue:
+			fallthrough
+		case JsonUintValue:
+			return genericFastVal2UintsOp(val, val1, uintOp)
+		case IntValue:
+			fallthrough
+		case JsonIntValue:
+			intCheck, valid := val1.AsInt()
+			if !valid {
+				return NewInvalidFastVal()
+			}
+			if intCheck >= 0 {
+				return genericFastVal2UintsOp(val, val1, uintOp)
+			} else {
+				uintCheck, valid1 := val.AsUint()
+				if !valid1 || uintCheck > math.MaxInt64 {
+					return NewInvalidFastVal()
+				}
+				return genericFastVal2IntsOp(val, val1, intOp)
+			}
+		case FloatValue:
+			fallthrough
+		case JsonFloatValue:
+			return genericFastVal2FloatsOp(val, val1, floatOp)
+		default:
+			return NewInvalidFastVal()
+		}
+	case IntValue:
+		fallthrough
+	case JsonIntValue:
+		switch val1.dataType {
+		case UintValue:
+			fallthrough
+		case JsonUintValue:
+			intCheck, valid := val.AsInt()
+			if !valid {
+				return NewInvalidFastVal()
+			}
+			if intCheck >= 0 {
+				return genericFastVal2UintsOp(val, val1, uintOp)
+			} else {
+				uint1Check, valid1 := val1.AsUint()
+				if !valid1 || uint1Check > math.MaxInt64 {
+					return NewInvalidFastVal()
+				}
+				return genericFastVal2IntsOp(val, val1, intOp)
+			}
+		case IntValue:
+			fallthrough
+		case JsonIntValue:
+			return genericFastVal2IntsOp(val, val1, intOp)
+		case FloatValue:
+			fallthrough
+		case JsonFloatValue:
+			return genericFastVal2FloatsOp(val, val1, floatOp)
+		default:
+			return NewInvalidFastVal()
+		}
+	case FloatValue:
+		fallthrough
+	case JsonFloatValue:
+		return genericFastVal2FloatsOp(val, val1, floatOp)
+	default:
+		return NewInvalidFastVal()
+	}
 }
 
-func FastValMathSub(val, val1 FastVal) FastVal {
-	return genericFastVal2FloatsOp(val, val1, fastValMathSub)
+func FastValMathAdd(val, val1 FastVal) FastVal {
+	return fastValMathAddMultSharedLogic(val, val1, fastValMathAddInt, fastValMathAddUint, fastValMathAdd)
 }
 
 func FastValMathMul(val, val1 FastVal) FastVal {
-	return genericFastVal2FloatsOp(val, val1, fastValMathMult)
+	return fastValMathAddMultSharedLogic(val, val1, fastValMathMultInt, fastValMathMultUint, fastValMathMult)
+}
+
+func FastValMathSub(val, val1 FastVal) FastVal {
+	switch val.dataType {
+	case UintValue:
+		fallthrough
+	case JsonUintValue:
+		switch val1.dataType {
+		case UintValue:
+			fallthrough
+		case JsonUintValue:
+			uintCheck, valid := val.AsUint()
+			uint1Check, valid1 := val1.AsUint()
+			if !valid || !valid1 {
+				return NewInvalidFastVal()
+			}
+			if uintCheck >= uint1Check {
+				return genericFastVal2UintsOp(val, val1, fastValMathSubUint)
+			} else {
+				// Negative result
+				return genericFastVal2IntsOp(val, val1, fastValMathSubInt)
+			}
+		case IntValue:
+			fallthrough
+		case JsonIntValue:
+			uintCheck, valid := val.AsUint()
+			int1Check, valid1 := val1.AsInt()
+			if !valid || !valid1 {
+				return NewInvalidFastVal()
+			}
+			if int1Check >= 0 {
+				int1AsUint, valid := val1.AsUint()
+				if !valid {
+					return NewInvalidFastVal()
+				}
+				if int1AsUint > uintCheck {
+					// Result will be negative
+					return genericFastVal2IntsOp(val, val1, fastValMathSubInt)
+				} else {
+					return genericFastVal2UintsOp(val, val1, fastValMathSubUint)
+				}
+			} else {
+				// Subtracting a neg int == adding int to uint to be prevent potential overflow
+				positiveIntFastVal := NewIntFastVal(fastValNegateInt(int1Check))
+				return genericFastVal2UintsOp(val, positiveIntFastVal, fastValMathAddUint)
+			}
+		case FloatValue:
+			fallthrough
+		case JsonFloatValue:
+			return genericFastVal2FloatsOp(val, val1, fastValMathSub)
+		default:
+			return NewInvalidFastVal()
+		}
+	case IntValue:
+		fallthrough
+	case JsonIntValue:
+		switch val1.dataType {
+		case UintValue:
+			fallthrough
+		case JsonUintValue:
+			intCheck, valid := val.AsInt()
+			uint1Check, valid1 := val1.AsUint()
+			if !valid || !valid1 {
+				return NewInvalidFastVal()
+			}
+			if uint1Check > math.MaxInt64 {
+				// Instead of invalid - best effort and let float take care of it
+				return genericFastVal2FloatsOp(val, val1, fastValMathSub)
+			}
+			if intCheck >= 0 {
+				uint1AsInt, _ := val1.AsInt()
+				if intCheck > uint1AsInt {
+					// positive result
+					return genericFastVal2UintsOp(val, val1, fastValMathSubUint)
+				} else {
+					return genericFastVal2IntsOp(val, val1, fastValMathSubInt)
+				}
+			} else {
+				// Result will be negative
+				return genericFastVal2IntsOp(val, val1, fastValMathSubInt)
+			}
+		case IntValue:
+			fallthrough
+		case JsonIntValue:
+			return genericFastVal2IntsOp(val, val1, fastValMathSubInt)
+		case FloatValue:
+			fallthrough
+		case JsonFloatValue:
+			return genericFastVal2FloatsOp(val, val1, fastValMathSub)
+		default:
+			return NewInvalidFastVal()
+		}
+	case FloatValue:
+		fallthrough
+	case JsonFloatValue:
+		return genericFastVal2FloatsOp(val, val1, fastValMathSub)
+	default:
+		return NewInvalidFastVal()
+	}
 }
 
 func FastValMathDiv(val, val1 FastVal) FastVal {
-	return genericFastVal2FloatsOp(val, val1, fastValMathDiv)
+	switch val.dataType {
+	case UintValue:
+		fallthrough
+	case JsonUintValue:
+		switch val1.dataType {
+		case UintValue:
+			fallthrough
+		case JsonUintValue:
+			val1Check, valid := val1.AsUint()
+			if !valid || val1Check == 0 {
+				return NewInvalidFastVal()
+			}
+			return genericFastVal2UintsOp(val, val1, fastValMathDivUint)
+		case IntValue:
+			fallthrough
+		case JsonIntValue:
+			int1Check, valid1 := val1.AsInt()
+			if !valid1 || int1Check == 0 {
+				return NewInvalidFastVal()
+			} else if int1Check > 0 {
+				return genericFastVal2UintsOp(val, val1, fastValMathDivUint)
+			} else {
+				return genericFastVal2IntsOp(val, val1, fastValMathDivInt)
+			}
+		case FloatValue:
+			fallthrough
+		case JsonFloatValue:
+			return genericFastVal2FloatsOp(val, val1, fastValMathDiv)
+		default:
+			return NewInvalidFastVal()
+		}
+	case IntValue:
+		fallthrough
+	case JsonIntValue:
+		intCheck, valid := val.AsInt()
+		if !valid {
+			return NewInvalidFastVal()
+		}
+		switch val1.dataType {
+		case UintValue:
+			fallthrough
+		case JsonUintValue:
+			uint1Check, valid1 := val1.AsUint()
+			if !valid1 || intCheck < 0 && uint1Check > math.MaxInt64 {
+				// Cannot convert to int type
+				return genericFastVal2FloatsOp(val, val1, fastValMathDiv)
+			} else {
+				if intCheck >= 0 {
+					return genericFastVal2UintsOp(val, val1, fastValMathDivUint)
+				} else {
+					return genericFastVal2IntsOp(val, val1, fastValMathDivInt)
+				}
+			}
+		case IntValue:
+			fallthrough
+		case JsonIntValue:
+			return genericFastVal2IntsOp(val, val1, fastValMathDivInt)
+		case FloatValue:
+			fallthrough
+		case JsonFloatValue:
+			return genericFastVal2FloatsOp(val, val1, fastValMathDiv)
+		default:
+			return NewInvalidFastVal()
+		}
+	case FloatValue:
+		fallthrough
+	case JsonFloatValue:
+		return genericFastVal2FloatsOp(val, val1, fastValMathDiv)
+	default:
+		return NewInvalidFastVal()
+	}
 }
 
 func FastValMathMod(val, val1 FastVal) FastVal {
-	return genericFastVal2IntsOp(val, val1, fastValMathMod)
+	switch val.dataType {
+	case UintValue:
+		fallthrough
+	case JsonUintValue:
+		switch val1.dataType {
+		case UintValue:
+			fallthrough
+		case JsonUintValue:
+			val1Check, valid := val1.AsUint()
+			if !valid || val1Check == 0 {
+				return NewInvalidFastVal()
+			}
+			return genericFastVal2UintsOp(val, val1, fastValMathModUint)
+		case IntValue:
+			fallthrough
+		case JsonIntValue:
+			int1Check, valid1 := val1.AsInt()
+			if !valid1 || int1Check == 0 {
+				return NewInvalidFastVal()
+			} else if int1Check > 0 {
+				return genericFastVal2UintsOp(val, val1, fastValMathModUint)
+			} else {
+				return genericFastVal2IntsOp(val, val1, fastValMathMod)
+			}
+		default:
+			return NewInvalidFastVal()
+		}
+	case IntValue:
+		fallthrough
+	case JsonIntValue:
+		intCheck, valid := val.AsInt()
+		if !valid {
+			return NewInvalidFastVal()
+		}
+		switch val1.dataType {
+		case UintValue:
+			fallthrough
+		case JsonUintValue:
+			uint1Check, valid1 := val1.AsUint()
+			if !valid1 || intCheck < 0 && uint1Check > math.MaxInt64 {
+				// Cannot convert to int type
+				return NewInvalidFastVal()
+			} else {
+				if intCheck >= 0 {
+					return genericFastVal2UintsOp(val, val1, fastValMathModUint)
+				} else {
+					return genericFastVal2IntsOp(val, val1, fastValMathMod)
+				}
+			}
+		case IntValue:
+			fallthrough
+		case JsonIntValue:
+			return genericFastVal2IntsOp(val, val1, fastValMathMod)
+		default:
+			return NewInvalidFastVal()
+		}
+	default:
+		return NewInvalidFastVal()
+	}
 }
 
 func FastValMathNeg(val FastVal) FastVal {
-	return genericFastValFloatOp(val, fastValNegate)
+	switch val.dataType {
+	case UintValue:
+		fallthrough
+	case JsonUintValue:
+		checkUint, _ := val.AsUint()
+		if checkUint > math.MaxInt64 {
+			return NewInvalidFastVal()
+		}
+		fallthrough
+	case IntValue:
+		fallthrough
+	case JsonIntValue:
+		return genericFastValIntOp(val, fastValNegateInt)
+	case FloatValue:
+		fallthrough
+	case JsonFloatValue:
+		return genericFastValFloatOp(val, fastValNegate)
+	default:
+		return NewInvalidFastVal()
+	}
 }
