@@ -1,6 +1,6 @@
 // Copyright 2018 Couchbase, Inc. All rights reserved.
 
-// +build !pcre
+// +build !pcre,!perf
 
 package gojsonsm
 
