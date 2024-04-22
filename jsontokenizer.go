@@ -484,5 +484,20 @@ DataLoop:
 	tkn.pos = dataPos
 
 	return tokenType, tokenData, tokenDataLen, nil
+}
 
+func (tkn tokenType) IsTokenEnd() bool {
+	return tkn == tknEnd
+}
+
+func (tkn tokenType) IsString() bool {
+	return tkn == tknString
+}
+
+func (tkn tokenType) IsObjEnd() bool {
+	return tkn == tknObjectEnd
+}
+
+func NewJsonTokenizer() *jsonTokenizer {
+	return &jsonTokenizer{}
 }
