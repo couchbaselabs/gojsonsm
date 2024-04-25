@@ -1,9 +1,17 @@
-// Copyright 2018-2019 Couchbase, Inc. All rights reserved.
+// Copyright 2024-Present Couchbase, Inc. All rights reserved.
 
 package gojsonsm
 
 import (
 	"fmt"
+)
+
+var (
+	ErrNilComposer        error = fmt.Errorf("nil composer")
+	ErrNilData            error = fmt.Errorf("nil data")
+	ErrInvalidJSON        error = fmt.Errorf("invalid JSON object")
+	ErrUnexpectedEOF      error = fmt.Errorf("unexpected EOF")
+	ErrInsufficientMemory error = fmt.Errorf("insufficient memory allocated for dst, cannot proceed")
 )
 
 type jsonObjComposer struct {
@@ -15,32 +23,53 @@ type jsonObjComposer struct {
 	atLeastOneFieldLeft bool
 }
 
-func (composer *jsonObjComposer) Write(data []byte) {
-	copy(composer.body[composer.pos:composer.pos+len(data)], data)
+// writes a given slice of data to the composer
+// returns any errors in the process
+func (composer *jsonObjComposer) Write(data []byte, tknType tokenType) error {
+	if composer == nil {
+		return ErrNilComposer
+	}
+	if data == nil {
+		return ErrNilData
+	}
+	// if we are about to write objectEnd token i.e. "}", we should ensure that the previous position was not a ","
+	// if it is ",", step back by one position and write a "}"
+	if tknType == tknObjectEnd && composer.pos-1 >= 0 && composer.body[composer.pos-1] == ',' {
+		composer.pos--
+	}
+	n := copy(composer.body[composer.pos:composer.pos+len(data)], data)
+	if n != len(data) {
+		return ErrInsufficientMemory
+	}
 	composer.pos += len(data)
+	return nil
 }
 
-func (composer *jsonObjComposer) Commit(stepBackAndClose bool) (int, bool) {
-	// close the JSON object after stepping back by one position explicity if requested
-	if stepBackAndClose && composer.pos-1 >= 0 {
-		if composer.body[composer.pos-1] != '{' {
-			composer.pos--
-		}
-		composer.body[composer.pos] = '}'
-		composer.pos++
+// finalizes the composer data and sets atLeastOneFieldLeft
+// returns (length of composer data, if atleast one field is left in the newly composed JSON object)
+func (composer *jsonObjComposer) Commit() (int, bool, error) {
+	if composer == nil {
+		return 0, false, ErrNilComposer
 	}
-
 	// if the body is anything other than {}, we have atleast one field inside it
 	composer.atLeastOneFieldLeft = composer.pos > 2
 
-	return composer.pos, composer.atLeastOneFieldLeft
+	return composer.pos, composer.atLeastOneFieldLeft, nil
+}
+
+func handleError(err error) (int, int, bool, error) {
+	return 0, 0, false, err
 }
 
 // Given a byte encoded json object - "src", a list of keys of items to remove from src - "remove",
-// the function removes the items from "src" and places them in "removed" and the remaining json object is stored in "dst"
-// returns (final length of dst, number of items removed, if there are any items left in dst at the end, error)
-// Caller has the ability to allocate memory for "dst" and "removed". If nil is passed, only then memory is allocated.
+// the function removes the items from "src" and places them in "removed" and the remaining json object is stored in "dst".
+// It returns (final length of dst, number of items removed, if there are any items left in dst at the end, error).
+// Caller has the ability to pass in pre-allocated byte slices for dst and removed. If nil is passed, only then memory is allocated.
 func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, removed map[string][]byte) (int, int, bool, error) {
+	if len(src) < 2 || src[0] != '{' || src[len(src)-1] != '}' {
+		return 0, 0, false, ErrInvalidJSON
+	}
+
 	var removedLen int
 	if removed == nil {
 		removed = make(map[string][]byte)
@@ -59,146 +88,191 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 	tokenizer := &jsonTokenizer{}
 	tokenizer.Reset(src)
 
-	var tknType tokenType
-	var tknLen, dstLen int
-	var tkn []byte
+	var atleastOneFieldLeft bool
+	var tknType, tknType1, tknType2, tknType3, tknType4 tokenType
+	var potentialKey, potentialObjDelimiter, tkn []byte
+	var depth, tknLen, dstLen int
 	var err error
-	var atleastOneFieldLeft, removedLastItem bool
-	var depth int
 	for tknType != tknEnd {
-		tknType, tkn, tknLen, err = tokenizer.Step()
+		tknType1, potentialKey, tknLen, err = tokenizer.Step()
 		if err != nil {
-			return 0, 0, false, fmt.Errorf("error stepping to next token, src=%s, pos=%v, err=%v", src, tokenizer.Position(), err)
+			err = fmt.Errorf("error stepping to next token, src=%s, pos=%v, err=%v", src, tokenizer.Position(), err)
+			return handleError(err)
 		}
+		tknType = tknType1
 
 		switch tknType {
 		case tknString:
-			// depth 1 strings are JSON object keys, need to check if it is the key to remove
-			if depth != 1 {
-				composer.Write(tkn)
-				continue
-			}
+			// string token can be a JSON key, need to process
 		case tknObjectStart:
 			fallthrough
 		case tknArrayStart:
 			depth++
-			composer.Write(tkn)
+			err = composer.Write(potentialKey, tknType1)
+			if err != nil {
+				return handleError(err)
+			}
 			continue
 		case tknObjectEnd:
 			fallthrough
 		case tknArrayEnd:
 			depth--
 			if depth < 0 {
-				return 0, 0, false, fmt.Errorf("invalid JSON object")
+				return 0, 0, false, ErrInvalidJSON
 			}
-			composer.Write(tkn)
+			err = composer.Write(potentialKey, tknType1)
+			if err != nil {
+				return handleError(err)
+			}
 			continue
 		case tknEnd:
 			continue
 		default:
-			composer.Write(tkn)
+			// can be tknObjectKeyDelim, tknListDelim, tknEscString, tknInteger, tknNumber,
+			// tknNull, tknTrue, tknFalse, tknUnknown
+			err = composer.Write(potentialKey, tknType1)
+			if err != nil {
+				return handleError(err)
+			}
 			continue
 		}
 
-		// strip off the quotes from the string
-		key := tkn[1 : tknLen-1]
+		// Process to check if
+		// 1. Matches with the keys to remove
+		// 2. potentialKey is a JSON key (a non-key string could have matched in step 1)
+
+		// strip off the quotes from the string for matching
+		key := potentialKey[1 : tknLen-1]
 
 		matched := false
 		for _, keyToRemove := range remove {
-			if BytesEqualsString(key, keyToRemove) {
-				matched = true
+			if !BytesEqualsString(key, keyToRemove) {
+				continue
+			}
 
-				// ":"
-				tknType, _, _, err = tokenizer.Step()
-				if err != nil || tknType != tknObjectKeyDelim {
-					return 0, 0, false, fmt.Errorf("error stepping to next token, expecting :, src=%s, pos=%v, err=%v", src, tokenizer.Position(), err)
+			matched = true
+
+			// if the next token is ":", then potentialKey is a JSON key that matched
+			tknType2, potentialObjDelimiter, _, err = tokenizer.Step()
+			if err != nil {
+				err = fmt.Errorf("error stepping to next token, expecting :, src=%s, pos=%v, err=%v", src, tokenizer.Position(), err)
+				return handleError(err)
+			}
+			tknType = tknType2
+
+			if tknType2 != tknObjectKeyDelim {
+				// potentialKey is not a JSON key
+				err = composer.Write(potentialKey, tknType1)
+				if err != nil {
+					return handleError(err)
 				}
-
-				// parse the corresponding value
-				valStart := tokenizer.Position()
-				valEnd := valStart
-				valueDepth := 0
-				done := false
-
-				for !done {
-					tknType, _, _, err = tokenizer.Step()
-					if err != nil {
-						return 0, 0, false, fmt.Errorf("error stepping to next token, expecting JSON value, src=%s, pos=%v, err=%v", src, tokenizer.Position(), err)
-					}
-
-					valEnd = tokenizer.Position()
-
-					switch tknType {
-					case tknObjectStart:
-						fallthrough
-					case tknArrayStart:
-						valueDepth++
-					case tknObjectEnd:
-						fallthrough
-					case tknArrayEnd:
-						valueDepth--
-						if valueDepth == 0 {
-							done = true
-						} else if valueDepth < 0 {
-							return 0, 0, false, fmt.Errorf("invalid JSON object, src=%s, pos=%v", src, tokenizer.Position())
-						}
-					case tknString:
-						fallthrough
-					case tknEscString:
-						fallthrough
-					case tknInteger:
-						fallthrough
-					case tknNumber:
-						fallthrough
-					case tknNull:
-						fallthrough
-					case tknTrue:
-						fallthrough
-					case tknFalse:
-						if valueDepth == 0 {
-							done = true
-						}
-					case tknEnd:
-						return 0, 0, false, fmt.Errorf("unexpected EOF, src=%s, pos=%v", src, tokenizer.Position())
-					default:
-						// tknListDelim, tknObjectKeyDelim, tknUnknown
-					}
-				}
-				removed[keyToRemove] = src[valStart:valEnd]
-				removedLen++
-
-				// can be tknObjectEnd or tknListDelim
-				// if it is tknObjectEnd, we have to step back, remove a tknListDelim and place a tknObjectEnd before commiting
-				// if it is tknListDelim, don't write it
-				tknType, tkn, _, err = tokenizer.Step()
-				if err != nil || (tknType != tknObjectEnd && tknType != tknListDelim) {
-					return 0, 0, false, fmt.Errorf("error stepping to next token, expecting separator or objectEnd, got=%s, src=%s, pos=%v", tkn, src, tokenizer.Position())
+				err = composer.Write(potentialObjDelimiter, tknType2)
+				if err != nil {
+					return handleError(err)
 				}
 
 				if tknType == tknObjectEnd {
-					// this was the last item
-					if depth == 1 {
-						removedLastItem = true
-					}
 					depth--
 					if depth < 0 {
-						return 0, 0, false, fmt.Errorf("invalid JSON object")
+						return handleError(ErrInvalidJSON)
 					}
+				}
+				break
+			}
+
+			// parse the corresponding value
+			valStart := tokenizer.Position()
+			valEnd := valStart
+			valueDepth := 0
+			valueFound := false
+
+			for !valueFound {
+				tknType3, _, _, err = tokenizer.Step()
+				if err != nil {
+					err = fmt.Errorf("error stepping to next token, expecting JSON value, src=%s, pos=%v, err=%v", src, tokenizer.Position(), err)
+					return handleError(err)
+				}
+				tknType = tknType3
+
+				valEnd = tokenizer.Position()
+
+				switch tknType3 {
+				case tknObjectStart:
+					fallthrough
+				case tknArrayStart:
+					valueDepth++
+				case tknObjectEnd:
+					fallthrough
+				case tknArrayEnd:
+					valueDepth--
+					if valueDepth == 0 {
+						valueFound = true
+					} else if valueDepth < 0 {
+						return handleError(ErrInvalidJSON)
+					}
+				case tknString:
+					fallthrough
+				case tknEscString:
+					fallthrough
+				case tknInteger:
+					fallthrough
+				case tknNumber:
+					fallthrough
+				case tknNull:
+					fallthrough
+				case tknTrue:
+					fallthrough
+				case tknFalse:
+					if valueDepth == 0 {
+						valueFound = true
+					}
+				case tknEnd:
+					return handleError(ErrUnexpectedEOF)
+				default:
+					// can be tknListDelim, tknObjectKeyDelim, tknUnknown
+				}
+			}
+			removed[keyToRemove] = src[valStart:valEnd]
+			removedLen++
+
+			// can be tknObjectEnd or tknListDelim
+			// if it is tknListDelim, don't write it
+			tknType4, tkn, _, err = tokenizer.Step()
+			if err != nil || (tknType4 != tknObjectEnd && tknType4 != tknListDelim) {
+				err = fmt.Errorf("error stepping to next token, expecting separator or objectEnd, got=%s, src=%s, pos=%v", tkn, src, tokenizer.Position())
+				return handleError(err)
+			}
+			tknType = tknType4
+
+			if tknType4 == tknObjectEnd {
+				err = composer.Write(tkn, tknType)
+				if err != nil {
+					return handleError(err)
+				}
+				depth--
+				if depth < 0 {
+					return handleError(ErrInvalidJSON)
 				}
 			}
 		}
 
 		if !matched {
-			// okay to write this item
-			composer.Write(tkn)
+			// okay to write this item, since it didn't match
+			err = composer.Write(potentialKey, tknType1)
+			if err != nil {
+				return handleError(err)
+			}
 		}
 	}
 
 	if depth != 0 {
-		return 0, 0, false, fmt.Errorf("invalid input, needs to be a JSON object")
+		return handleError(ErrInvalidJSON)
 	}
 
-	dstLen, atleastOneFieldLeft = composer.Commit(removedLastItem)
+	dstLen, atleastOneFieldLeft, err = composer.Commit()
+	if err != nil {
+		return handleError(err)
+	}
 
 	return dstLen, removedLen, atleastOneFieldLeft, nil
 }

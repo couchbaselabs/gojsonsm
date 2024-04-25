@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Couchbase, Inc. All rights reserved.
+// Copyright 2024-Present Couchbase, Inc. All rights reserved.
 
 package gojsonsm
 
@@ -19,6 +19,7 @@ func Test_RemoveString(t *testing.T) {
 		remove                     []string
 		expectedRemoved            map[string][]byte
 		expectedAtleastOnFieldLeft bool
+		fails                      bool
 	}{
 		{
 			name:                       "only one string item",
@@ -68,6 +69,26 @@ func Test_RemoveString(t *testing.T) {
 			expectedRemoved:            map[string][]byte{"foo": []byte(`"bar"`), "foo1": []byte(`"bar1"`)},
 			expectedAtleastOnFieldLeft: true,
 		},
+		{
+			name:                       "key to be removed exists as value",
+			src:                        []byte(`{"foo4":"foo5","foo1":"bar1","foo2":"foo3","foo":"bar","foo6":"foo7"}`),
+			remove:                     []string{"foo", "foo1", "foo3", "foo5", "foo7"},
+			expectedDst:                []byte(`{"foo4":"foo5","foo2":"foo3","foo6":"foo7"}`),
+			expectedRemoved:            map[string][]byte{"foo": []byte(`"bar"`), "foo1": []byte(`"bar1"`)},
+			expectedAtleastOnFieldLeft: true,
+		},
+		{
+			name:   "not a JSON object, but a string",
+			src:    []byte("string"),
+			remove: []string{"string"},
+			fails:  true,
+		},
+		{
+			name:   "not a JSON object, but a list",
+			src:    []byte(`["string",1,2]`),
+			remove: []string{"string"},
+			fails:  true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -77,7 +98,11 @@ func Test_RemoveString(t *testing.T) {
 			removed := make(map[string][]byte)
 			length, removedCnt, atleastOneField, err := MatchAndRemoveItemsFromJsonObject([]byte(tt.src), tt.remove, dst, removed)
 			dst = dst[:length]
-			a.Nil(err)
+			if tt.fails {
+				a.NotNil(err)
+			} else {
+				a.Nil(err)
+			}
 			a.Equal(removedCnt, len(tt.expectedRemoved))
 			a.NotNil(dst)
 			a.Equal(length, len(dst))
@@ -547,14 +572,13 @@ func Test_RemoveBoolean(t *testing.T) {
 func Test_RemoveObject(t *testing.T) {
 	a := assert.New(t)
 
-	obj0 := `{"obj0":{"o6":"hello"},"obj1":{},"obj2":{"obj3":"obj4","obj6":[1,2,"hello",4,"world",{"obj7":7}],"obj8":123,"obj9":null,"obj10":false},"obj11":{"5":null,"7":true,"6":3.142},"obj12":{"12":false},"obj13":{"34":1234,"4":569}}`
-	obj1 := `{"obj0":{"o":{"o1":{}}},"obj1":{"o":[],"o1":{},"o2":[{},{"hi":"hello"}]},"obj2":{"obj3":false,"obj6":431,"obj8":null,"obj9":{"o":{}},"obj10":false},"obj12":{"pi":3.1421},"obj13":{"null":null},"obj11":{"list":[1,2,"hello",4,"world",{"obj7":7}]}}`
-	obj2 := `{"obj8":{"num":123},"obj9":{"null":null,"null1":"null1"},"obj10":false},"obj11":{"LIST":"list","list":[5,6,7,3.142]},"obj12":{"pi":3.1421,"obj13":null,"obj0":false,"obj1":123},"obj2":{"obj3":"obj4","obj6":[1,2,"hello",4,"world",{"obj7":7}]}`
+	obj0 := `{"obj0":{"o6":"hello"},"obj1":{},"obj2":{"obj3":"obj4","obj6":[1,2,"hello",4,"world",{"obj7":7}],"obj8":123,"obj9":null,"obj10":false},"obj11":{"5":null,"7":true,"6":3.142},"obj12":{"12":false},"obj13":{"34":1234,"4":569},"nested":"nested":{"bar1":"bar2","bar3":"bar4","bar5":"bar6","bar7":"bar8","bar9":"bar10"}}`
+	obj1 := `{"obj0":{"o":{"o1":{}}},"obj1":{"o":[],"o1":{},"nested":"nested":{"bar1":"bar2","bar3":"bar4","bar5":"bar6","bar7":"bar8","bar9":"bar10"},"o2":[{},{"hi":"hello"}]},"obj2":{"obj3":false,"obj6":431,"obj8":null,"obj9":{"o":{}},"obj10":false},"obj12":{"pi":3.1421},"obj13":{"null":null},"obj11":{"list":[1,2,"hello",4,"world",{"obj7":7}]}}`
+	obj2 := `{"nested":{"bar1":"bar2","bar3":"bar4","bar5":"bar6","bar7":"bar8","bar9":"bar10"},"obj8":{"num":123},"obj9":{"null":null,"null1":"null1"},"obj10":false},"obj11":{"LIST":"list","list":[5,6,7,3.142]},"obj12":{"pi":3.1421,"obj13":null,"obj0":false,"obj1":123},"obj2":{"obj3":"obj4","obj6":[1,2,"hello",4,"world",{"obj7":7}]}`
 	obj3 := `{"obj1":{"num":123,"obj2":{"obj3":"obj4","obj6":[1,2,"hello",4,"world",{},{},{}],"obj0":false,"obj8":123,"obj9":null,"obj10":false}},"obj11":[5,6,7,3.142],"obj12":3.1421,"obj13":null}`
 	obj4 := `{"obj0":false,"obj1":123,"obj11":[5,6,7,3.142],"obj12":3.1421,"obj2":{"obj3":"obj4","obj6":[1,2,"hello",4,"world",{"obj7":7}],"obj8":123,"obj9":null,"obj10":false},"obj13":null}`
 	obj5 := `{"obj0":false,"obj1":123,"obj2":{"obj3":"obj4","obj6":[1,2,"hello",4,"world",{"obj7":7}],"obj8":123,"obj9":null,"obj10":false},"obj11":[5,6,7,3.142],"obj12":3.1421,"obj13":null}`
 
-	fmt.Printf("o=%s\n", obj1[82:84])
 	tests := []struct {
 		name                       string
 		src, expectedDst           []byte
@@ -606,6 +630,14 @@ func Test_RemoveObject(t *testing.T) {
 			name:                       "key doesn't exist",
 			src:                        []byte(fmt.Sprintf(`{"foo1":%v,"foo2":%v,"foo":%v}`, obj1, obj2, obj0)),
 			remove:                     []string{"foo", "foo1", "foo3", "foo5"},
+			expectedDst:                []byte(fmt.Sprintf(`{"foo2":%v}`, obj2)),
+			expectedRemoved:            map[string][]byte{"foo": []byte(obj0), "foo1": []byte(obj1)},
+			expectedAtleastOnFieldLeft: true,
+		},
+		{
+			name:                       "to remove string is a value",
+			src:                        []byte(fmt.Sprintf(`{"foo1":%v,"foo2":%v,"foo":%v}`, obj1, obj2, obj0)),
+			remove:                     []string{"foo", "foo1", "foo3", "foo5", "bar2", "bar4", "bar6", "bar8", "bar10"},
 			expectedDst:                []byte(fmt.Sprintf(`{"foo2":%v}`, obj2)),
 			expectedRemoved:            map[string][]byte{"foo": []byte(obj0), "foo1": []byte(obj1)},
 			expectedAtleastOnFieldLeft: true,
@@ -718,5 +750,93 @@ func Test_RemoveArray(t *testing.T) {
 				a.Equal(string(removed[k]), string(v))
 			}
 		})
+	}
+}
+
+func Test_RemoveNestedItem(t *testing.T) {
+	a := assert.New(t)
+
+	stringValues := []string{`"bar"`, `"bar1"`, `"bar2"`}
+	escapeStringValues := []string{`"\"b\"ar"`, `"b\"a\"r1"`, `"ba\"r\"2"`}
+	trueValues := []string{"true", "true", "true"}
+	falseValues := []string{"false", "false", "false"}
+	intValues := []string{"123", "4562", "3142"}
+	numValues := []string{"3.142", "9.81", "10.00"}
+	nullValues := []string{"null", "null", "null"}
+	objectValues := []string{
+		`{"a":{"b":[1,2,3],"c":"d"},"f":null,"g":[{},{"hi":"hello"}]}`,
+		`{"f":"foo","a":{"b":[1,2,3],"c":"d"},"g":[{},{"hi":"hello"}]}`,
+		`{"g":[{},{"hi":"hello"},"b\"a\"r"],"a":{"b":[1,2,3],"c":"d"},"f":3.142}`,
+	}
+	listValues := []string{
+		`[{"b":[[],{},[],],"c":"d"},["hi",{},3.142,3,null,{"hi":"hello"},true],"str":"s"]`,
+		`[["hi",{},3.142,3,null,{"hi":"hello"},true],"num":3.142,{"b":[[],{},[],],"c":"d"}]`,
+		`["bool":true,{"b":[[],{},[],],"c":"d"},["hi",{},3.142,3,null,{"hi":"hello"},true]]`,
+	}
+
+	values := [][]string{stringValues, escapeStringValues, trueValues, falseValues, intValues, nullValues, numValues, objectValues, listValues}
+	types := []string{"string", "escape string", "true boolean", "false boolean", "integer", "null", "number", "object", "list"}
+
+	for i, value := range values {
+		tests := []struct {
+			name                       string
+			src, expectedDst           []byte
+			remove                     []string
+			expectedRemoved            map[string][]byte
+			expectedAtleastOnFieldLeft bool
+		}{
+			{
+				name:                       fmt.Sprintf("only nested value - %v", types[i]),
+				src:                        []byte(fmt.Sprintf(`{"obj1":{"foo":%v}}`, value[0])),
+				expectedDst:                []byte(`{"obj1":{}}`),
+				remove:                     []string{"foo"},
+				expectedRemoved:            map[string][]byte{"foo": []byte(value[0])},
+				expectedAtleastOnFieldLeft: true,
+			},
+			{
+				name:                       fmt.Sprintf("nested value at the beginning - %v", types[i]),
+				src:                        []byte(fmt.Sprintf(`{"obj1":{"foo":%v,"foo1":%v}}`, value[0], value[1])),
+				expectedDst:                []byte(fmt.Sprintf(`{"obj1":{"foo1":%v}}`, value[1])),
+				remove:                     []string{"foo"},
+				expectedRemoved:            map[string][]byte{"foo": []byte(value[0])},
+				expectedAtleastOnFieldLeft: true,
+			},
+			{
+				name:                       fmt.Sprintf("nested value at the end - %v", types[i]),
+				src:                        []byte(fmt.Sprintf(`{"obj1":{"foo":%v,"foo1":%v}}`, value[0], value[1])),
+				expectedDst:                []byte(fmt.Sprintf(`{"obj1":{"foo":%v}}`, value[0])),
+				remove:                     []string{"foo1"},
+				expectedRemoved:            map[string][]byte{"foo1": []byte(value[1])},
+				expectedAtleastOnFieldLeft: true,
+			},
+			{
+				name:                       fmt.Sprintf("nested value at the middle - %v", types[i]),
+				src:                        []byte(fmt.Sprintf(`{"obj1":{"foo":%v,"foo1":%v,"foo2":%v}}`, value[0], value[1], value[2])),
+				expectedDst:                []byte(fmt.Sprintf(`{"obj1":{"foo":%v,"foo2":%v}}`, value[0], value[2])),
+				remove:                     []string{"foo1"},
+				expectedRemoved:            map[string][]byte{"foo1": []byte(value[1])},
+				expectedAtleastOnFieldLeft: true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				fmt.Printf("======= %s ========\n", tt.name)
+				dst := make([]byte, len(tt.src))
+				removed := make(map[string][]byte)
+				length, removedCnt, atleastOneField, err := MatchAndRemoveItemsFromJsonObject([]byte(tt.src), tt.remove, dst, removed)
+				dst = dst[:length]
+				a.Nil(err)
+				a.Equal(removedCnt, len(tt.expectedRemoved))
+				a.NotNil(dst)
+				a.Equal(length, len(dst))
+				a.Equal(len(removed), len(tt.expectedRemoved))
+				a.Equal(atleastOneField, tt.expectedAtleastOnFieldLeft)
+				a.Equal(bytes.Equal(dst, []byte(tt.expectedDst)), true)
+				for k, v := range tt.expectedRemoved {
+					a.Equal(string(removed[k]), string(v))
+				}
+			})
+		}
 	}
 }
