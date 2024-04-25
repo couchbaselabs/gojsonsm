@@ -12,6 +12,7 @@ var (
 	ErrInvalidJSON        error = fmt.Errorf("invalid JSON object")
 	ErrUnexpectedEOF      error = fmt.Errorf("unexpected EOF")
 	ErrInsufficientMemory error = fmt.Errorf("insufficient memory allocated for dst, cannot proceed")
+	ErrUnrecognisedToken  error = fmt.Errorf("unrecognised token in the JSON object")
 )
 
 type jsonObjComposer struct {
@@ -101,7 +102,7 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 		}
 		tknType = tknType1
 
-		switch tknType {
+		switch tknType1 {
 		case tknString:
 			// string token can be a JSON key, need to process
 		case tknObjectStart:
@@ -127,9 +128,11 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 			continue
 		case tknEnd:
 			continue
+		case tknUnknown:
+			return handleError(ErrUnrecognisedToken)
 		default:
 			// can be tknObjectKeyDelim, tknListDelim, tknEscString, tknInteger, tknNumber,
-			// tknNull, tknTrue, tknFalse, tknUnknown
+			// tknNull, tknTrue, tknFalse
 			err = composer.Write(potentialKey, tknType1)
 			if err != nil {
 				return handleError(err)
@@ -161,6 +164,10 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 			tknType = tknType2
 
 			if tknType2 != tknObjectKeyDelim {
+				if tknType2 == tknUnknown {
+					return handleError(ErrUnrecognisedToken)
+				}
+
 				// potentialKey is not a JSON key
 				err = composer.Write(potentialKey, tknType1)
 				if err != nil {
@@ -197,6 +204,8 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 				valEnd = tokenizer.Position()
 
 				switch tknType3 {
+				case tknUnknown:
+					return handleError(ErrUnrecognisedToken)
 				case tknObjectStart:
 					fallthrough
 				case tknArrayStart:
@@ -229,7 +238,7 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 				case tknEnd:
 					return handleError(ErrUnexpectedEOF)
 				default:
-					// can be tknListDelim, tknObjectKeyDelim, tknUnknown
+					// can be tknListDelim, tknObjectKeyDelim
 				}
 			}
 			removed[keyToRemove] = src[valStart:valEnd]
@@ -239,7 +248,7 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 			// if it is tknListDelim, don't write it
 			tknType4, tkn, _, err = tokenizer.Step()
 			if err != nil || (tknType4 != tknObjectEnd && tknType4 != tknListDelim) {
-				err = fmt.Errorf("error stepping to next token, expecting separator or objectEnd, got=%s, src=%s, pos=%v", tkn, src, tokenizer.Position())
+				err = fmt.Errorf("error stepping to next token, expecting separator or objectEnd, got=%s, src=%s, pos=%v, err=%v", tkn, src, tokenizer.Position(), err)
 				return handleError(err)
 			}
 			tknType = tknType4
@@ -253,6 +262,8 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 				if depth < 0 {
 					return handleError(ErrInvalidJSON)
 				}
+			} else if tknType4 == tknUnknown {
+				return handleError(ErrUnrecognisedToken)
 			}
 		}
 
