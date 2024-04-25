@@ -64,7 +64,7 @@ func handleError(err error) (int, int, bool, error) {
 // Given a byte encoded json object - "src", a list of keys of items to remove from src - "remove",
 // the function removes the items from "src" and places them in "removed" and the remaining json object is stored in "dst".
 // It returns (final length of dst, number of items removed, if there are any items left in dst at the end, error).
-// Caller has the ability to pass in pre-allocated byte slices for dst and removed. If nil is passed, only then memory is allocated.
+// Caller has the ability to pass in pre-allocated byte slices for dst and pre-allocated map for removed. If nil is passed, only then memory is allocated.
 func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, removed map[string][]byte) (int, int, bool, error) {
 	if len(src) < 2 || src[0] != '{' || src[len(src)-1] != '}' {
 		return 0, 0, false, ErrInvalidJSON
