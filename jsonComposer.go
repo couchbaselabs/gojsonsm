@@ -22,6 +22,8 @@ type jsonObjComposer struct {
 	pos int
 	// if the newly composed json has atleast one field
 	atLeastOneFieldLeft bool
+	// the last written token type
+	prevTokenType tokenType
 }
 
 // writes a given slice of data to the composer
@@ -36,7 +38,7 @@ func (composer *jsonObjComposer) Write(data []byte, tknType tokenType) error {
 
 	// if we are about to write objectEnd token i.e. "}", we should ensure that the previous position was not a ","
 	// if it is ",", step back by one position and write a "}"
-	if tknType == tknObjectEnd && composer.pos-1 >= 0 && composer.body[composer.pos-1] == ',' {
+	if tknType == tknObjectEnd && composer.pos-1 >= 0 && composer.prevTokenType == tknListDelim {
 		composer.pos--
 	}
 	n := copy(composer.body[composer.pos:composer.pos+len(data)], data)
@@ -44,6 +46,7 @@ func (composer *jsonObjComposer) Write(data []byte, tknType tokenType) error {
 		return ErrInsufficientMemory
 	}
 	composer.pos += len(data)
+	composer.prevTokenType = tknType
 	return nil
 }
 
