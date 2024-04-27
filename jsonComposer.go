@@ -72,22 +72,17 @@ func handleError(err error) (int, int, bool, error) {
 // Caller has the ability to pass in pre-allocated byte slices for dst and pre-allocated map for removed. If nil is passed, only then memory is allocated.
 func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, removed map[string][]byte) (int, int, bool, error) {
 	if len(src) < 2 || src[0] != '{' || src[len(src)-1] != '}' {
-		return 0, 0, false, ErrInvalidJSON
+		return handleError(ErrInvalidJSON)
 	}
-
-	var removedLen int
 	if removed == nil {
 		removed = make(map[string][]byte)
 	}
-
 	if dst == nil {
 		dst = make([]byte, len(src))
 	}
 
 	composer := &jsonObjComposer{
-		body:                dst,
-		pos:                 0,
-		atLeastOneFieldLeft: false,
+		body: dst,
 	}
 
 	tokenizer := &jsonTokenizer{}
@@ -96,7 +91,7 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 	var atleastOneFieldLeft bool
 	var tknType, tknType1, tknType2, tknType3, tknType4 tokenType
 	var potentialKey, potentialObjDelimiter, tkn []byte
-	var depth, tknLen, dstLen int
+	var depth, tknLen, dstLen, removedLen int
 	var err error
 
 	for tknType != tknEnd {
@@ -210,8 +205,6 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 				valEnd = tokenizer.Position()
 
 				switch tknType3 {
-				case tknUnknown:
-					return handleError(ErrUnrecognisedToken)
 				case tknObjectStart:
 					fallthrough
 				case tknArrayStart:
@@ -243,6 +236,8 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 					}
 				case tknEnd:
 					return handleError(ErrUnexpectedEOF)
+				case tknUnknown:
+					return handleError(ErrUnrecognisedToken)
 				default:
 					// can be tknListDelim, tknObjectKeyDelim
 				}
