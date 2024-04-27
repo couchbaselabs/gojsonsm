@@ -769,9 +769,9 @@ func Test_RemoveNestedItem(t *testing.T) {
 		`{"g":[{},{"hi":"hello"},"b\"a\"r"],"a":{"b":[1,2,3],"c":"d"},"f":3.142}`,
 	}
 	listValues := []string{
-		`[{"b":[[],{},[],],"c":"d"},["hi",{},3.142,3,null,{"hi":"hello"},true],"str":"s"]`,
-		`[["hi",{},3.142,3,null,{"hi":"hello"},true],"num":3.142,{"b":[[],{},[],],"c":"d"}]`,
-		`["bool":true,{"b":[[],{},[],],"c":"d"},["hi",{},3.142,3,null,{"hi":"hello"},true]]`,
+		`[{"b":[[],{},[]],"c":"d"},["hi",{},3.142,3,null,{"hi":"hello"},true],"str","\"s"]`,
+		`[["hi",{},3.142,3,null,{"hi":"hello"},true],"num":3.142,{"b":[[],{},[]],"c":"d"}]`,
+		`["bool":true,{"b":[[],{},[]],"c":"d"},["hi",{},3.142,3,null,{"hi":"hello"},true]]`,
 	}
 
 	values := [][]string{stringValues, escapeStringValues, trueValues, falseValues, intValues, nullValues, numValues, objectValues, listValues}

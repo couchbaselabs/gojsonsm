@@ -33,6 +33,7 @@ func (composer *jsonObjComposer) Write(data []byte, tknType tokenType) error {
 	if data == nil {
 		return ErrNilData
 	}
+
 	// if we are about to write objectEnd token i.e. "}", we should ensure that the previous position was not a ","
 	// if it is ",", step back by one position and write a "}"
 	if tknType == tknObjectEnd && composer.pos-1 >= 0 && composer.body[composer.pos-1] == ',' {
@@ -94,6 +95,7 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 	var potentialKey, potentialObjDelimiter, tkn []byte
 	var depth, tknLen, dstLen int
 	var err error
+
 	for tknType != tknEnd {
 		tknType1, potentialKey, tknLen, err = tokenizer.Step()
 		if err != nil {
@@ -104,7 +106,42 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 
 		switch tknType1 {
 		case tknString:
-			// string token can be a JSON key, need to process
+			// string token can be a JSON key or a string JSON value
+			// if the next token is ":", then potentialKey is a JSON key
+			tknType2, potentialObjDelimiter, _, err = tokenizer.Step()
+			if err != nil {
+				err = fmt.Errorf("error stepping to next token, expecting :, src=%s, pos=%v, err=%v", src, tokenizer.Position(), err)
+				return handleError(err)
+			}
+			tknType = tknType2
+
+			if tknType2 != tknObjectKeyDelim {
+				if tknType2 == tknUnknown {
+					return handleError(ErrUnrecognisedToken)
+				} else if tknType2 == tknEnd {
+					return handleError(ErrUnexpectedEOF)
+				}
+
+				// potentialKey is not a JSON key, so don't try to match it with keys in "remove"
+				err = composer.Write(potentialKey, tknType1)
+				if err != nil {
+					return handleError(err)
+				}
+				err = composer.Write(potentialObjDelimiter, tknType2)
+				if err != nil {
+					return handleError(err)
+				}
+
+				if tknType2 == tknObjectEnd {
+					depth--
+					if depth < 0 {
+						return handleError(ErrInvalidJSON)
+					}
+				}
+				continue
+			}
+
+			// potentialKey is indeed a JSON key, will try to match with "remove" next
 		case tknObjectStart:
 			fallthrough
 		case tknArrayStart:
@@ -140,9 +177,7 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 			continue
 		}
 
-		// Process to check if
-		// 1. Matches with the keys to remove
-		// 2. potentialKey is a JSON key (a non-key string could have matched in step 1)
+		// Process to check if the JSON key parsed matches with the keys to remove
 
 		// strip off the quotes from the string for matching
 		key := potentialKey[1 : tknLen-1]
@@ -154,38 +189,6 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 			}
 
 			matched = true
-
-			// if the next token is ":", then potentialKey is a JSON key that matched
-			tknType2, potentialObjDelimiter, _, err = tokenizer.Step()
-			if err != nil {
-				err = fmt.Errorf("error stepping to next token, expecting :, src=%s, pos=%v, err=%v", src, tokenizer.Position(), err)
-				return handleError(err)
-			}
-			tknType = tknType2
-
-			if tknType2 != tknObjectKeyDelim {
-				if tknType2 == tknUnknown {
-					return handleError(ErrUnrecognisedToken)
-				}
-
-				// potentialKey is not a JSON key
-				err = composer.Write(potentialKey, tknType1)
-				if err != nil {
-					return handleError(err)
-				}
-				err = composer.Write(potentialObjDelimiter, tknType2)
-				if err != nil {
-					return handleError(err)
-				}
-
-				if tknType == tknObjectEnd {
-					depth--
-					if depth < 0 {
-						return handleError(ErrInvalidJSON)
-					}
-				}
-				break
-			}
 
 			// parse the corresponding value
 			valStart := tokenizer.Position()
@@ -270,6 +273,10 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 		if !matched {
 			// okay to write this item, since it didn't match
 			err = composer.Write(potentialKey, tknType1)
+			if err != nil {
+				return handleError(err)
+			}
+			err = composer.Write(potentialObjDelimiter, tknType1)
 			if err != nil {
 				return handleError(err)
 			}
