@@ -36,9 +36,9 @@ func (composer *jsonObjComposer) Write(data []byte, tknType tokenType) error {
 		return ErrNilData
 	}
 
-	// if we are about to write objectEnd token i.e. "}", we should ensure that the previous position was not a ","
-	// if it is ",", step back by one position and write a "}"
-	if tknType == tknObjectEnd && composer.pos-1 >= 0 && composer.prevTokenType == tknListDelim {
+	// if we are about to write objectEnd token i.e. "}", we should ensure that the previous token was not a ","
+	// if it was a ",", step back by one position and write a "}"
+	if tknType == tknObjectEnd && composer.prevTokenType == tknListDelim {
 		composer.pos--
 	}
 	n := copy(composer.body[composer.pos:composer.pos+len(data)], data)
@@ -204,6 +204,13 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 
 				valEnd = tokenizer.Position()
 
+				if isLiteralToken(tknType3) {
+					if valueDepth == 0 {
+						valueFound = true
+					}
+					continue
+				}
+
 				switch tknType3 {
 				case tknObjectStart:
 					fallthrough
@@ -217,22 +224,6 @@ func MatchAndRemoveItemsFromJsonObject(src []byte, remove []string, dst []byte, 
 						valueFound = true
 					} else if valueDepth < 0 {
 						return handleError(ErrInvalidJSON)
-					}
-				case tknString:
-					fallthrough
-				case tknEscString:
-					fallthrough
-				case tknInteger:
-					fallthrough
-				case tknNumber:
-					fallthrough
-				case tknNull:
-					fallthrough
-				case tknTrue:
-					fallthrough
-				case tknFalse:
-					if valueDepth == 0 {
-						valueFound = true
 					}
 				case tknEnd:
 					return handleError(ErrUnexpectedEOF)
